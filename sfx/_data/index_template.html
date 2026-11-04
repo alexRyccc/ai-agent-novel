@@ -1,0 +1,5066 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="robots" content="noindex, nofollow">
+<title>SkillForge · 技能控制台</title>
+<script>
+/* 在首屏绘制前应用主题，避免浅色闪烁；仅设置 data-theme，不写规则体 */
+(function () {
+  try {
+    var t = localStorage.getItem('sf:theme');
+    if (t === 'dark' || t === 'light') {
+      document.documentElement.setAttribute('data-theme', t);
+    }
+  } catch (e) { /* 隐私模式无 localStorage 时静默降级为跟随系统 */ }
+})();
+</script>
+<style>
+/* ==========================================================================
+   SkillForge 本地控制台 · 单文件样式
+   --------------------------------------------------------------------------
+   约定：
+   1. 所有颜色 / 间距 / 字号 / 圆角 / 阴影 / 时长一律走 :root 令牌，规则体内不写字面量；
+   2. 间距阶梯基于 4px 基准：4 / 8 / 12 / 16 / 24 / 32 / 48 / 64；
+   3. 字号阶梯：12 / 13 / 14 / 16 / 20 / 24 / 32；
+   4. 默认深色主题，浅色主题在 prefers-color-scheme: light 下覆盖同一组令牌；
+      另设 [data-theme="light"] / [data-theme="dark"] 支持设置页的「深/浅/跟随」；
+   5. 断点只能写成字面量（CSS 规范不允许变量用于 @media 条件），已集中在此文件底部。
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- 令牌 · 字体族 ---- */
+  --sf-font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --sf-font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono",
+    Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* ---- 令牌 · 间距（4px 基准 8 级阶梯） ---- */
+  --sf-space-1: 4px;
+  --sf-space-2: 8px;
+  --sf-space-3: 12px;
+  --sf-space-4: 16px;
+  --sf-space-5: 24px;
+  --sf-space-6: 32px;
+  --sf-space-7: 48px;
+  --sf-space-8: 64px;
+
+  /* ---- 令牌 · 字号阶梯 ---- */
+  --sf-font-xs: 12px;
+  --sf-font-sm: 13px;
+  --sf-font-base: 14px;
+  --sf-font-md: 16px;
+  --sf-font-lg: 20px;
+  --sf-font-xl: 24px;
+  --sf-font-2xl: 32px;
+
+  /* ---- 令牌 · 行高与字重 ---- */
+  --sf-line-tight: 1.35;
+  --sf-line-normal: 1.6;
+  --sf-weight-regular: 400;
+  --sf-weight-medium: 500;
+  --sf-weight-semibold: 600;
+  --sf-weight-bold: 700;
+
+  /* ---- 令牌 · 圆角 ---- */
+  --sf-radius-xs: 4px;
+  --sf-radius-sm: 6px;
+  --sf-radius-md: 10px;
+  --sf-radius-lg: 14px;
+  --sf-radius-pill: 999px;
+
+  /* ---- 令牌 · 尺寸与描边 ---- */
+  --sf-hairline: 1px;
+  --sf-focus-width: 2px;
+  --sf-focus-offset: 2px;
+  --sf-state-bar: 3px;
+  --sf-control-height: 40px;
+  --sf-control-sm: 30px;
+  --sf-btn-min-w: 96px;
+  --sf-icon-sm: 14px;
+  --sf-logo: 36px;
+  --sf-avatar: 30px;
+  --sf-spinner-w: 2px;
+  --sf-filter-min-w: 220px;
+  --sf-content-max: 1280px;
+  --sf-skip-shift: -300%;
+
+  /* ---- 令牌 · 组件尺寸（规则体内不再出现裸 px，一律走这里） ---- */
+  --sf-rule-w: 2px;
+  --sf-score-dot: 8px;
+  --sf-search-w-min: 120px;
+  --sf-search-w-max: 240px;
+  --sf-pop-max-h: 280px;
+  --sf-sort-pop-w: 300px;
+  --sf-view-pop-w: 240px;
+  --sf-kv-key-min: 96px;
+  --sf-kv-key-max: 132px;
+  --sf-textarea-h: 220px;
+  --sf-set-key-min: 140px;
+  --sf-set-key-max: 200px;
+  --sf-wb-aside-w: 280px;
+  --sf-detail-aside-w: 320px;
+  --sf-bar-h: 6px;      /* 分项得分条形图的条高（可解释性增强，复用 4px 阶梯外的组件尺寸令牌） */
+
+  /* ---- 令牌 · 应用框架（visual-spec §1 新增，不改动现有令牌取值） ---- */
+  --sf-nav-w: 248px;
+  --sf-nav-w-collapsed: 64px;
+  --sf-topbar-h: 56px;
+  --sf-scrim: rgba(0, 0, 0, 0.5);
+  --sf-shadow-drawer: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --sf-z-skip: 10;
+  --sf-z-nav: 20;
+  --sf-z-topbar: 30;
+  --sf-z-scrim: 40;
+  --sf-z-drawer: 50;
+  --sf-z-toast: 60;
+
+  /* ---- 令牌 · 动效（仅状态过渡，全部 <= 150ms） ---- */
+  --sf-dur-fast: 100ms;
+  --sf-dur-base: 150ms;
+  --sf-ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+  /* ---- 令牌 · 色彩（深色为默认主题） ---- */
+  --sf-color-bg: #0d1117;
+  --sf-color-surface: #161b22;
+  --sf-color-surface-raised: #1c2330;
+  --sf-color-input: #0d1117;
+  --sf-color-border: #30363d;
+  --sf-color-border-soft: #262d38;
+  --sf-color-border-strong: #414b5a;
+  --sf-color-text: #e6edf3;
+  --sf-color-text-2: #a7b0bb;
+  --sf-color-text-3: #8b949e;
+  --sf-color-accent: #6e56cf;
+  --sf-color-accent-hover: #7c66e0;
+  --sf-color-accent-fg: #ffffff;
+  --sf-color-accent-text: #b9a9ff;
+  --sf-color-accent-soft: #241f43;
+  --sf-color-accent-line: #4b3d8f;
+  --sf-color-tag-bg: #1b2c40;
+  --sf-color-tag-fg: #7fb8ff;
+  --sf-color-warn: #e3b341;
+  --sf-color-warn-soft: #2e2612;
+  --sf-color-danger: #ff7b72;
+  --sf-color-danger-soft: #2f1a1a;
+  --sf-color-focus: #8b7bff;
+
+  /* ---- 令牌 · 阴影 ---- */
+  --sf-shadow-accent: 0 4px 14px rgba(110, 86, 207, 0.35);
+  --sf-shadow-raised: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+/* 浅色主题：只覆盖令牌，不改任何规则体（跟随系统） */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --sf-color-bg: #f4f5f7;
+    --sf-color-surface: #ffffff;
+    --sf-color-surface-raised: #ffffff;
+    --sf-color-input: #ffffff;
+    --sf-color-border: #d5dae2;
+    --sf-color-border-soft: #e6e9ef;
+    --sf-color-border-strong: #b9c2cf;
+    --sf-color-text: #10151c;
+    --sf-color-text-2: #4a5260;
+    --sf-color-text-3: #5b6472;
+    --sf-color-accent: #5b45b8;
+    --sf-color-accent-hover: #4c38a0;
+    --sf-color-accent-fg: #ffffff;
+    --sf-color-accent-text: #4b34a8;
+    --sf-color-accent-soft: #ece8fb;
+    --sf-color-accent-line: #b5a9e6;
+    --sf-color-tag-bg: #e8eefb;
+    --sf-color-tag-fg: #1f4b8f;
+    --sf-color-warn: #8a6100;
+    --sf-color-warn-soft: #fdf3d8;
+    --sf-color-danger: #a3242b;
+    --sf-color-danger-soft: #fdeaea;
+    --sf-color-focus: #5b45b8;
+
+    --sf-shadow-accent: 0 4px 12px rgba(91, 69, 184, 0.22);
+    --sf-shadow-raised: 0 6px 18px rgba(16, 21, 28, 0.12);
+  }
+}
+
+/* 设置页「浅」：显式覆盖为浅色令牌（与跟随系统的浅色值完全一致） */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --sf-color-bg: #f4f5f7;
+  --sf-color-surface: #ffffff;
+  --sf-color-surface-raised: #ffffff;
+  --sf-color-input: #ffffff;
+  --sf-color-border: #d5dae2;
+  --sf-color-border-soft: #e6e9ef;
+  --sf-color-border-strong: #b9c2cf;
+  --sf-color-text: #10151c;
+  --sf-color-text-2: #4a5260;
+  --sf-color-text-3: #5b6472;
+  --sf-color-accent: #5b45b8;
+  --sf-color-accent-hover: #4c38a0;
+  --sf-color-accent-fg: #ffffff;
+  --sf-color-accent-text: #4b34a8;
+  --sf-color-accent-soft: #ece8fb;
+  --sf-color-accent-line: #b5a9e6;
+  --sf-color-tag-bg: #e8eefb;
+  --sf-color-tag-fg: #1f4b8f;
+  --sf-color-warn: #8a6100;
+  --sf-color-warn-soft: #fdf3d8;
+  --sf-color-danger: #a3242b;
+  --sf-color-danger-soft: #fdeaea;
+  --sf-color-focus: #5b45b8;
+
+  --sf-shadow-accent: 0 4px 12px rgba(91, 69, 184, 0.22);
+  --sf-shadow-raised: 0 6px 18px rgba(16, 21, 28, 0.12);
+}
+
+/* 设置页「深」：显式覆盖为深色令牌（与跟随系统的深色值完全一致），
+   并在浅色系统下压过 prefers-color-scheme: light 的媒体查询 */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --sf-color-bg: #0d1117;
+  --sf-color-surface: #161b22;
+  --sf-color-surface-raised: #1c2330;
+  --sf-color-input: #0d1117;
+  --sf-color-border: #30363d;
+  --sf-color-border-soft: #262d38;
+  --sf-color-border-strong: #414b5a;
+  --sf-color-text: #e6edf3;
+  --sf-color-text-2: #a7b0bb;
+  --sf-color-text-3: #8b949e;
+  --sf-color-accent: #6e56cf;
+  --sf-color-accent-hover: #7c66e0;
+  --sf-color-accent-fg: #ffffff;
+  --sf-color-accent-text: #b9a9ff;
+  --sf-color-accent-soft: #241f43;
+  --sf-color-accent-line: #4b3d8f;
+  --sf-color-tag-bg: #1b2c40;
+  --sf-color-tag-fg: #7fb8ff;
+  --sf-color-warn: #e3b341;
+  --sf-color-warn-soft: #2e2612;
+  --sf-color-danger: #ff7b72;
+  --sf-color-danger-soft: #2f1a1a;
+  --sf-color-focus: #8b7bff;
+
+  --sf-shadow-accent: 0 4px 14px rgba(110, 86, 207, 0.35);
+  --sf-shadow-raised: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+/* --------------------------------------------------------------------------
+   基础重置
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--sf-color-bg);
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-stack);
+  font-size: var(--sf-font-base);
+  line-height: var(--sf-line-normal);
+  overflow-wrap: anywhere;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* 统一的可见焦点环：不做 outline: none */
+:focus-visible {
+  outline: var(--sf-focus-width) solid var(--sf-color-focus);
+  outline-offset: var(--sf-focus-offset);
+}
+
+/* 仅供读屏使用的文本 */
+.sf-sr-only {
+  position: absolute;
+  width: var(--sf-hairline);
+  height: var(--sf-hairline);
+  margin: calc(var(--sf-hairline) * -1);
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* 跳过导航（键盘用户第一站） */
+.sf-skip {
+  position: absolute;
+  top: var(--sf-space-2);
+  left: var(--sf-space-4);
+  z-index: var(--sf-z-skip);
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-color-accent);
+  color: var(--sf-color-accent-fg);
+  font-size: var(--sf-font-sm);
+  font-weight: var(--sf-weight-semibold);
+  text-decoration: none;
+  transform: translateY(var(--sf-skip-shift));
+  transition: transform var(--sf-dur-base) var(--sf-ease-out);
+}
+
+.sf-skip:focus {
+  transform: translateY(0);
+}
+
+/* --------------------------------------------------------------------------
+   应用框架：侧边栏 + 顶栏 + 自报条 + 内容区
+   -------------------------------------------------------------------------- */
+.sf-shell-app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* 侧边栏（移动端默认离屏抽屉，≥768 收进 flex 行） */
+.sf-side {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--sf-z-drawer);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  width: var(--sf-nav-w);
+  height: 100vh;
+  padding: var(--sf-space-3);
+  background: var(--sf-color-surface);
+  border-right: var(--sf-hairline) solid var(--sf-color-border);
+  transform: translateX(-100%);
+  transition: transform var(--sf-dur-base) var(--sf-ease-out);
+}
+
+.sf-shell-app.nav-open .sf-side {
+  transform: translateX(0);
+  box-shadow: var(--sf-shadow-drawer);
+}
+
+.sf-side-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2);
+  min-width: 0;
+}
+
+.sf-side-head-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.sf-side-title {
+  font-size: var(--sf-font-md);
+  font-weight: var(--sf-weight-bold);
+  line-height: var(--sf-line-tight);
+}
+
+.sf-side-sub {
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+  overflow-wrap: anywhere;
+}
+
+.sf-nav-collapse {
+  flex: 0 0 auto;
+  display: none;
+  width: var(--sf-control-sm);
+  height: var(--sf-control-sm);
+  padding: 0;
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-md);
+  cursor: pointer;
+  transition: border-color var(--sf-dur-fast) var(--sf-ease-out),
+    color var(--sf-dur-fast) var(--sf-ease-out);
+}
+
+.sf-nav-collapse:hover {
+  border-color: var(--sf-color-accent-line);
+  color: var(--sf-color-accent-text);
+}
+
+.sf-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sf-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+
+.sf-nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-3);
+  width: 100%;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border: var(--sf-hairline) solid transparent;
+  border-left: var(--sf-rule-w) solid transparent;
+  border-radius: var(--sf-radius-md);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-base);
+  font-weight: var(--sf-weight-medium);
+  text-decoration: none;
+  transition: background-color var(--sf-dur-fast) var(--sf-ease-out),
+    color var(--sf-dur-fast) var(--sf-ease-out);
+}
+
+.sf-nav-link:hover {
+  background: var(--sf-color-surface-raised);
+  color: var(--sf-color-text);
+}
+
+/* 选中态：accent-soft 底色 + 左 2px accent-line（视觉决策①） */
+.sf-nav-link.is-current {
+  background: var(--sf-color-accent-soft);
+  border-left-color: var(--sf-color-accent-line);
+  color: var(--sf-color-text);
+}
+
+.sf-nav-ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--sf-logo);
+  height: var(--sf-logo);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-color-surface-raised);
+  color: var(--sf-color-accent-text);
+  font-size: var(--sf-font-md);
+  line-height: 1;
+}
+
+.sf-nav-link.is-current .sf-nav-ico {
+  background: var(--sf-color-accent);
+  color: var(--sf-color-accent-fg);
+}
+
+.sf-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-side-foot {
+  padding: var(--sf-space-2);
+}
+
+/* 抽屉遮罩 */
+.sf-side-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--sf-z-scrim);
+  background: var(--sf-scrim);
+  border: 0;
+  padding: 0;
+}
+
+/* 主体列 */
+.sf-shell-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶栏 */
+.sf-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--sf-z-topbar);
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-3);
+  height: var(--sf-topbar-h);
+  padding: 0 var(--sf-space-4);
+  background: var(--sf-color-surface);
+  border-bottom: var(--sf-hairline) solid var(--sf-color-border);
+}
+
+.sf-hamburger {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sf-control-height);
+  height: var(--sf-control-height);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-md);
+  background: transparent;
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-lg);
+  cursor: pointer;
+}
+
+.sf-hamburger:hover {
+  border-color: var(--sf-color-border-strong);
+  color: var(--sf-color-text);
+}
+
+.sf-topbar-title {
+  flex: 0 0 auto;
+  font-size: var(--sf-font-lg);
+  font-weight: var(--sf-weight-semibold);
+  line-height: var(--sf-line-tight);
+}
+
+.sf-topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin-left: auto;
+  min-width: 0;
+}
+
+.sf-topbar-search {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.sf-input--sm {
+  min-height: var(--sf-control-sm);
+  height: var(--sf-control-sm);
+  padding: var(--sf-space-1) var(--sf-space-3);
+  font-size: var(--sf-font-sm);
+}
+
+.sf-topbar-search .sf-input {
+  width: clamp(var(--sf-search-w-min), 22vw, var(--sf-search-w-max));
+}
+
+/* 自报条（全局系统状态，位于顶栏之下、#sf-main 之上） */
+.sf-statusbar {
+  border-bottom: var(--sf-hairline) solid var(--sf-color-border);
+  background: var(--sf-color-surface);
+}
+
+.sf-statusbar[hidden] {
+  display: none;
+}
+
+.sf-statusbar .sf-state {
+  margin: 0;
+  border-width: 0;
+  border-bottom: var(--sf-hairline) solid var(--sf-color-border-soft);
+  border-radius: 0;
+}
+
+.sf-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin-top: var(--sf-space-3);
+}
+
+.sf-status-actions .sf-btn--ghost {
+  min-height: var(--sf-control-sm);
+  padding: var(--sf-space-1) var(--sf-space-3);
+}
+
+/* 内容区 */
+#sf-main {
+  max-width: var(--sf-content-max);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--sf-space-5) var(--sf-space-4) var(--sf-space-7);
+  flex: 1 1 auto;
+}
+
+.sf-footer {
+  margin-top: var(--sf-space-6);
+  padding: 0 var(--sf-space-4) var(--sf-space-5);
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+  text-align: center;
+}
+
+/* 全局 toast */
+.sf-toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--sf-space-5);
+  transform: translateX(-50%);
+  z-index: var(--sf-z-toast);
+  max-width: calc(100vw - var(--sf-space-6));
+  padding: var(--sf-space-3) var(--sf-space-4);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-surface-raised);
+  color: var(--sf-color-text);
+  font-size: var(--sf-font-sm);
+  box-shadow: var(--sf-shadow-raised);
+}
+
+.sf-toast.is-ok {
+  border-color: var(--sf-color-accent-line);
+}
+
+.sf-toast.is-fail {
+  border-color: var(--sf-color-danger);
+}
+
+/* --------------------------------------------------------------------------
+   统计卡
+   -------------------------------------------------------------------------- */
+.sf-stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-3);
+  margin-bottom: var(--sf-space-5);
+}
+
+.sf-stat {
+  min-width: 0;
+  padding: var(--sf-space-4);
+  border: var(--sf-hairline) solid var(--sf-color-border-soft);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-surface);
+}
+
+.sf-stat-num {
+  font-size: var(--sf-font-2xl);
+  font-weight: var(--sf-weight-bold);
+  line-height: var(--sf-line-tight);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.sf-stat--time .sf-stat-num {
+  font-size: var(--sf-font-lg);
+}
+
+.sf-stat--warn .sf-stat-num {
+  color: var(--sf-color-warn);
+}
+
+.sf-stat-num--accent {
+  color: var(--sf-color-accent-text);
+}
+
+.sf-stat-label {
+  margin-top: var(--sf-space-1);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-sm);
+}
+
+.sf-stat-note {
+  margin-top: var(--sf-space-2);
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+}
+
+/* --------------------------------------------------------------------------
+   品牌（侧栏头部复用）
+   -------------------------------------------------------------------------- */
+.sf-logo {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--sf-logo);
+  height: var(--sf-logo);
+  border-radius: var(--sf-radius-md);
+  background: linear-gradient(135deg, var(--sf-color-accent), var(--sf-color-accent-hover));
+  color: var(--sf-color-accent-fg);
+  font-size: var(--sf-font-md);
+  font-weight: var(--sf-weight-bold);
+  box-shadow: var(--sf-shadow-accent);
+}
+
+.sf-chip {
+  flex: 0 0 auto;
+  padding: var(--sf-space-1) var(--sf-space-3);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-pill);
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+  white-space: nowrap;
+}
+
+.sf-chip.is-ok {
+  border-color: var(--sf-color-accent-line);
+  color: var(--sf-color-accent-text);
+}
+
+.sf-chip.is-warn {
+  border-color: var(--sf-color-warn);
+  color: var(--sf-color-warn);
+}
+
+/* --------------------------------------------------------------------------
+   面板
+   -------------------------------------------------------------------------- */
+.sf-panel {
+  margin-bottom: var(--sf-space-5);
+  padding: var(--sf-space-4);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-color-surface);
+}
+
+.sf-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  margin-bottom: var(--sf-space-4);
+}
+
+.sf-panel-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sf-space-2);
+  font-size: var(--sf-font-lg);
+  font-weight: var(--sf-weight-semibold);
+  line-height: var(--sf-line-tight);
+}
+
+.sf-panel-note {
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+}
+
+.sf-count {
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-sm);
+  font-weight: var(--sf-weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   表单控件
+   -------------------------------------------------------------------------- */
+.sf-field {
+  min-width: 0;
+}
+
+.sf-lab-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-2);
+}
+
+.sf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin-bottom: var(--sf-space-4);
+}
+
+.sf-toolbar .sf-field {
+  flex: 1 1 var(--sf-filter-min-w);
+}
+
+.sf-input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--sf-control-height);
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-input);
+  color: var(--sf-color-text);
+  font-family: inherit;
+  font-size: var(--sf-font-base);
+  line-height: var(--sf-line-tight);
+  transition: border-color var(--sf-dur-base) var(--sf-ease-out);
+}
+
+.sf-input::placeholder {
+  color: var(--sf-color-text-3);
+}
+
+.sf-input:hover {
+  border-color: var(--sf-color-border-strong);
+}
+
+.sf-select {
+  min-height: var(--sf-control-height);
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-input);
+  color: var(--sf-color-text);
+  font-family: inherit;
+  font-size: var(--sf-font-base);
+  cursor: pointer;
+}
+
+.sf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sf-space-2);
+  min-width: var(--sf-btn-min-w);
+  min-height: var(--sf-control-height);
+  padding: var(--sf-space-2) var(--sf-space-5);
+  border: var(--sf-hairline) solid transparent;
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-accent);
+  color: var(--sf-color-accent-fg);
+  font-size: var(--sf-font-base);
+  font-weight: var(--sf-weight-semibold);
+  cursor: pointer;
+  transition: background-color var(--sf-dur-base) var(--sf-ease-out),
+    border-color var(--sf-dur-base) var(--sf-ease-out);
+}
+
+.sf-btn:hover:not(:disabled) {
+  background: var(--sf-color-accent-hover);
+}
+
+.sf-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.sf-btn--ghost {
+  min-width: auto;
+  min-height: var(--sf-control-height);
+  background: transparent;
+  border-color: var(--sf-color-border);
+  color: var(--sf-color-text-2);
+  font-weight: var(--sf-weight-medium);
+  font-size: var(--sf-font-sm);
+  padding: var(--sf-space-2) var(--sf-space-4);
+}
+
+.sf-btn--ghost:hover:not(:disabled) {
+  background: var(--sf-color-surface-raised);
+  border-color: var(--sf-color-border-strong);
+}
+
+.sf-btn--danger {
+  background: var(--sf-color-danger);
+  color: var(--sf-color-accent-fg);
+}
+
+.sf-btn--danger:hover:not(:disabled) {
+  background: var(--sf-color-danger);
+  filter: brightness(1.08);
+}
+
+.sf-spinner {
+  flex: 0 0 auto;
+  width: var(--sf-icon-sm);
+  height: var(--sf-icon-sm);
+  border: var(--sf-spinner-w) solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: sf-spin 800ms linear infinite;
+}
+
+@keyframes sf-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   通用状态块（loading / empty / error）
+   -------------------------------------------------------------------------- */
+.sf-state {
+  padding: var(--sf-space-4);
+  border: var(--sf-hairline) solid var(--sf-color-border-soft);
+  border-left: var(--sf-state-bar) solid var(--sf-color-border-strong);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-surface-raised);
+}
+
+.sf-state--loading {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-3);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-sm);
+}
+
+/* 空态左条取 warn 黄（视觉决策③「需操作空」：未扫描/待引导去 sfx scan）；错误态取 danger 红 */
+.sf-state--empty {
+  border-left-color: var(--sf-color-warn);
+  background: var(--sf-color-warn-soft);
+}
+
+/* 「无结果空」（视觉决策③：筛选无匹配）——中性非彩色，左条取 border-strong，底取 surface-raised，
+   与 --empty 同结构，仅左条色/底色不同，避免把"没找到"误报成"警告" */
+.sf-state--empty-neutral {
+  border-left-color: var(--sf-color-border-strong);
+  background: var(--sf-color-surface-raised);
+}
+
+.sf-state--info {
+  border-left-color: var(--sf-color-accent-line);
+  background: var(--sf-color-accent-soft);
+}
+
+.sf-state--error {
+  border-left-color: var(--sf-color-danger);
+  background: var(--sf-color-danger-soft);
+}
+
+.sf-state-title {
+  font-size: var(--sf-font-base);
+  font-weight: var(--sf-weight-semibold);
+  color: var(--sf-color-text);
+}
+
+.sf-state-body {
+  margin-top: var(--sf-space-2);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-sm);
+}
+
+.sf-state-hint {
+  margin-top: var(--sf-space-2);
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+}
+
+.sf-code {
+  padding: 0 var(--sf-space-1);
+  border: var(--sf-hairline) solid var(--sf-color-border-soft);
+  border-radius: var(--sf-radius-xs);
+  background: var(--sf-color-bg);
+  color: var(--sf-color-text-2);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-font-xs);
+  overflow-wrap: anywhere;
+}
+
+.sf-hint {
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+}
+
+/* --------------------------------------------------------------------------
+   路由试验台结果区
+   -------------------------------------------------------------------------- */
+.sf-lab-result {
+  margin-top: var(--sf-space-4);
+}
+
+.sf-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  margin-top: var(--sf-space-2);
+}
+
+.sf-match {
+  display: block;
+  padding: var(--sf-space-4);
+  border: var(--sf-hairline) solid var(--sf-color-border-soft);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-surface-raised);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--sf-dur-base) var(--sf-ease-out),
+    box-shadow var(--sf-dur-base) var(--sf-ease-out);
+}
+
+.sf-match:hover {
+  border-color: var(--sf-color-accent-line);
+  box-shadow: var(--sf-shadow-raised);
+}
+
+.sf-match-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-space-3);
+}
+
+.sf-match-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--sf-font-md);
+  font-weight: var(--sf-weight-semibold);
+  line-height: var(--sf-line-tight);
+  overflow-wrap: anywhere;
+}
+
+.sf-score {
+  flex: 0 0 auto;
+  padding: var(--sf-space-1) var(--sf-space-3);
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-color-accent-soft);
+  color: var(--sf-color-accent-text);
+  font-size: var(--sf-font-sm);
+  font-weight: var(--sf-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   v2.0 新增：采纳率徽标 / 搜索高亮 / 建议 / 排序浮层 / 视图菜单
+   （全部复用现有 --sf-* 令牌，不引入新色板；浮层显隐无过渡，跟随 reduced-motion）
+   ========================================================================== */
+.sf-score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  padding: var(--sf-space-1) var(--sf-space-2);
+  border: var(--sf-hairline) solid var(--sf-color-border-strong);
+  border-radius: var(--sf-radius-pill);
+  font-size: var(--sf-font-xs);
+  font-weight: var(--sf-weight-semibold);
+  line-height: var(--sf-line-tight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sf-score-badge::before {
+  content: "";
+  flex: 0 0 auto;
+  width: var(--sf-score-dot);
+  height: var(--sf-score-dot);
+  border-radius: var(--sf-radius-pill);
+  background: currentColor;
+}
+.sf-score-badge--rate {
+  background: var(--sf-color-accent-soft);
+  color: var(--sf-color-accent-text);
+  border-color: var(--sf-color-accent-line);
+}
+/* 数据不足 / 未采集：中性色，不暗示"低分"，也绝不显示 0% */
+.sf-score-badge--none {
+  background: var(--sf-color-surface-raised);
+  color: var(--sf-color-text-2);
+  border-color: var(--sf-color-border-strong);
+}
+
+.sf-mark {
+  background: var(--sf-color-accent-soft);
+  color: var(--sf-color-accent-text);
+  border-radius: var(--sf-radius-xs);
+  padding: 0 var(--sf-space-1);
+}
+
+.sf-suggest {
+  position: absolute;
+  top: calc(100% + var(--sf-space-1));
+  left: 0;
+  right: 0;
+  z-index: var(--sf-z-drawer);
+  max-height: var(--sf-pop-max-h);
+  overflow-y: auto;
+  background: var(--sf-color-surface);
+  border: var(--sf-hairline) solid var(--sf-color-border-strong);
+  border-radius: var(--sf-radius-md);
+  box-shadow: var(--sf-shadow-raised);
+}
+.sf-suggest[hidden] { display: none; }
+.sf-suggest-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sf-color-text);
+  font-family: inherit;
+  font-size: var(--sf-font-sm);
+  line-height: var(--sf-line-tight);
+  cursor: pointer;
+}
+.sf-suggest-item + .sf-suggest-item { border-top: var(--sf-hairline) solid var(--sf-color-border-soft); }
+.sf-suggest-item:hover,
+.sf-suggest-item.is-active {
+  background: var(--sf-color-accent-soft);
+  color: var(--sf-color-accent-text);
+}
+
+.sf-sort-panel {
+  position: absolute;
+  top: calc(100% + var(--sf-space-1));
+  left: 0;
+  z-index: var(--sf-z-drawer);
+  min-width: var(--sf-sort-pop-w);
+  padding: var(--sf-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  background: var(--sf-color-surface);
+  border: var(--sf-hairline) solid var(--sf-color-border-strong);
+  border-radius: var(--sf-radius-md);
+  box-shadow: var(--sf-shadow-raised);
+}
+.sf-sort-panel[hidden] { display: none; }
+.sf-sort-row { display: flex; align-items: center; gap: var(--sf-space-2); }
+.sf-sort-row .sf-btn { min-height: var(--sf-control-sm); padding: var(--sf-space-1) var(--sf-space-2); font-size: var(--sf-font-sm); }
+.sf-sort-label { flex: 1 1 auto; min-width: 0; font-size: var(--sf-font-sm); color: var(--sf-color-text); }
+.sf-sort-add { display: flex; gap: var(--sf-space-2); }
+.sf-sort-add .sf-select { flex: 1 1 auto; min-height: var(--sf-control-sm); font-size: var(--sf-font-sm); }
+.sf-sort-add .sf-btn { min-height: var(--sf-control-sm); padding: var(--sf-space-1) var(--sf-space-3); font-size: var(--sf-font-sm); }
+
+.sf-view-menu {
+  position: absolute;
+  top: calc(100% + var(--sf-space-1));
+  left: 0;
+  z-index: var(--sf-z-drawer);
+  min-width: var(--sf-view-pop-w);
+  padding: var(--sf-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  background: var(--sf-color-surface);
+  border: var(--sf-hairline) solid var(--sf-color-border-strong);
+  border-radius: var(--sf-radius-md);
+  box-shadow: var(--sf-shadow-raised);
+}
+.sf-view-menu[hidden] { display: none; }
+.sf-view-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  width: 100%;
+  text-align: left;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border: 0;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-color-text);
+  font-family: inherit;
+  font-size: var(--sf-font-sm);
+  line-height: var(--sf-line-tight);
+  cursor: pointer;
+}
+.sf-view-item:hover { background: var(--sf-color-accent-soft); color: var(--sf-color-accent-text); }
+.sf-view-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-view-del {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-md);
+  line-height: 1;
+  padding: 0 var(--sf-space-1);
+  cursor: pointer;
+}
+.sf-view-del:hover { color: var(--sf-color-danger); }
+.sf-view-empty { padding: var(--sf-space-2) var(--sf-space-3); color: var(--sf-color-text-3); font-size: var(--sf-font-xs); }
+
+.sf-match-reason {
+  margin-top: var(--sf-space-2);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-sm);
+}
+
+.sf-match-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin-top: var(--sf-space-3);
+}
+
+.sf-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--sf-space-1) var(--sf-space-2);
+  border: var(--sf-hairline) solid var(--sf-color-border-soft);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-color-bg);
+  color: var(--sf-color-text-3);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-font-xs);
+  line-height: var(--sf-line-tight);
+  overflow-wrap: anywhere;
+}
+
+.sf-path--missing {
+  color: var(--sf-color-text-3);
+  font-style: italic;
+}
+
+.sf-copy {
+  flex: 0 0 auto;
+  min-height: var(--sf-control-sm);
+  padding: var(--sf-space-1) var(--sf-space-3);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-color-surface);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-xs);
+  font-weight: var(--sf-weight-medium);
+  cursor: pointer;
+  transition: border-color var(--sf-dur-fast) var(--sf-ease-out),
+    color var(--sf-dur-fast) var(--sf-ease-out);
+}
+
+.sf-copy:hover:not(:disabled) {
+  border-color: var(--sf-color-accent-line);
+  color: var(--sf-color-accent-text);
+}
+
+.sf-copy:disabled {
+  cursor: default;
+}
+
+.sf-copy.is-ok {
+  border-color: var(--sf-color-accent-line);
+  color: var(--sf-color-accent-text);
+}
+
+.sf-copy.is-fail {
+  border-color: var(--sf-color-danger);
+  color: var(--sf-color-danger);
+}
+
+/* --------------------------------------------------------------------------
+   路由试验台 · 可解释性 + 采纳反馈（v2.1）
+   —— 全部复用现有 --sf-* 令牌；条形宽度由 JS 内联 percentage，规则体无裸值；
+      explain 缺失时整块隐藏，绝不影响 reason/分数降级渲染
+   -------------------------------------------------------------------------- */
+/* 置信度徽标：高=accent、中=中性、低=灰；颜色对均与 :root 对比度校验一致 */
+.sf-conf {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sf-space-2);
+  border: var(--sf-hairline) solid var(--sf-color-border-strong);
+  border-radius: var(--sf-radius-pill);
+  font-size: var(--sf-font-xs);
+  font-weight: var(--sf-weight-semibold);
+  line-height: var(--sf-line-normal);
+  white-space: nowrap;
+}
+.sf-conf--high {
+  background: var(--sf-color-accent-soft);
+  border-color: var(--sf-color-accent-line);
+  color: var(--sf-color-accent-text);
+}
+.sf-conf--mid {
+  background: var(--sf-color-surface-raised);
+  border-color: var(--sf-color-border-strong);
+  color: var(--sf-color-text-2);
+}
+.sf-conf--low {
+  background: var(--sf-color-bg);
+  border-color: var(--sf-color-border);
+  color: var(--sf-color-text-3);
+}
+
+/* 并列候选提示条：warn 色醒目，不淹没在 reason 文本里 */
+.sf-tie {
+  margin-top: var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border: var(--sf-hairline) solid var(--sf-color-warn);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-color-warn-soft);
+  color: var(--sf-color-warn);
+  font-size: var(--sf-font-xs);
+}
+
+/* 结果区顶部的阈值提示 */
+.sf-threshold-note {
+  margin: 0 0 var(--sf-space-2);
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 分项得分条形图 */
+.sf-explain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  margin-top: var(--sf-space-3);
+  padding-top: var(--sf-space-3);
+  border-top: var(--sf-hairline) solid var(--sf-color-border-soft);
+}
+.sf-explain-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+.sf-explain-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  font-size: var(--sf-font-xs);
+}
+.sf-explain-label {
+  flex: 0 0 auto;
+  min-width: var(--sf-kv-key-min);
+  color: var(--sf-color-text-3);
+}
+.sf-explain-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--sf-bar-h);
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-color-surface);
+  overflow: hidden;
+}
+.sf-explain-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-color-accent);
+}
+.sf-explain-val {
+  flex: 0 0 auto;
+  color: var(--sf-color-accent-text);
+  font-variant-numeric: tabular-nums;
+}
+.sf-explain-w {
+  flex: 0 0 auto;
+  color: var(--sf-color-text-3);
+}
+.sf-explain-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-1);
+}
+.sf-explain-group-label {
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+}
+.sf-syn-hit {
+  padding: 0 var(--sf-space-2);
+  border: var(--sf-hairline) dashed var(--sf-color-border-strong);
+  border-radius: var(--sf-radius-pill);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-xs);
+  line-height: var(--sf-line-normal);
+}
+
+/* 匹配卡底部操作排：采纳 / 误推荐 / 复制路径 */
+.sf-match-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+  margin-top: var(--sf-space-3);
+  padding-top: var(--sf-space-3);
+  border-top: var(--sf-hairline) solid var(--sf-color-border-soft);
+}
+
+/* 无结果空态的三条出路 */
+.sf-match-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+  margin-top: var(--sf-space-3);
+}
+
+/* 误推荐计数徽标：danger 弱化，不吓人 */
+.sf-feedback-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sf-space-2);
+  border: var(--sf-hairline) solid var(--sf-color-danger);
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-color-danger-soft);
+  color: var(--sf-color-danger);
+  font-size: var(--sf-font-xs);
+  font-weight: var(--sf-weight-medium);
+  line-height: var(--sf-line-normal);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   技能卡片 / 市场卡片 / 工作台列表项（统一 .sf-card 基底）
+   -------------------------------------------------------------------------- */
+.sf-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-4);
+}
+
+.sf-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  min-width: 0;
+  padding: var(--sf-space-4);
+  border: var(--sf-hairline) solid var(--sf-color-border-soft);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-surface-raised);
+  transition: border-color var(--sf-dur-base) var(--sf-ease-out),
+    box-shadow var(--sf-dur-base) var(--sf-ease-out);
+}
+
+a.sf-card {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.sf-card:hover {
+  border-color: var(--sf-color-accent-line);
+  box-shadow: var(--sf-shadow-raised);
+}
+
+.sf-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.sf-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--sf-avatar);
+  height: var(--sf-avatar);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-color-accent-soft);
+  color: var(--sf-color-accent-text);
+  font-size: var(--sf-font-sm);
+  font-weight: var(--sf-weight-bold);
+}
+
+.sf-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sf-card-name {
+  font-size: var(--sf-font-md);
+  font-weight: var(--sf-weight-semibold);
+  line-height: var(--sf-line-tight);
+  overflow-wrap: anywhere;
+}
+
+.sf-card-meta {
+  margin-top: var(--sf-space-1);
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+  overflow-wrap: anywhere;
+}
+
+.sf-badge {
+  flex: 0 0 auto;
+  padding: 0 var(--sf-space-2);
+  border: var(--sf-hairline) dashed var(--sf-color-border-strong);
+  border-radius: var(--sf-radius-pill);
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+  line-height: var(--sf-line-normal);
+  white-space: nowrap;
+}
+
+/* 示例数据标记：mock 区块必须让用户"看得见"，不能只写在源码注释里 */
+.sf-badge--demo {
+  display: inline-block;
+  border-style: solid;
+  border-color: var(--sf-color-warn);
+  color: var(--sf-color-warn);
+}
+
+.sf-demo-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin: 0 0 var(--sf-space-3);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-xs);
+}
+
+.sf-summary {
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-sm);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.sf-summary--empty {
+  color: var(--sf-color-text-3);
+  font-style: italic;
+}
+
+.sf-summary--full {
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+}
+
+.sf-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sf-tag {
+  max-width: 100%;
+  padding: 0 var(--sf-space-2);
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-color-tag-bg);
+  color: var(--sf-color-tag-fg);
+  font-size: var(--sf-font-xs);
+  line-height: var(--sf-line-normal);
+  overflow-wrap: anywhere;
+}
+
+.sf-tag--more {
+  color: var(--sf-color-text-3);
+  background: transparent;
+  border: var(--sf-hairline) solid var(--sf-color-border);
+}
+
+.sf-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin-top: auto;
+  padding-top: var(--sf-space-1);
+}
+
+/* 快捷入口卡（首页） */
+.sf-quick {
+  gap: var(--sf-space-1);
+}
+
+.sf-quick-ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--sf-logo);
+  height: var(--sf-logo);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-accent-soft);
+  color: var(--sf-color-accent-text);
+  font-size: var(--sf-font-md);
+}
+
+.sf-quick-desc {
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-sm);
+}
+
+/* 概览最近活动紧凑列表 */
+.sf-activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sf-activity-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2);
+  border-radius: var(--sf-radius-md);
+  color: inherit;
+  text-decoration: none;
+}
+
+.sf-activity-item:hover {
+  background: var(--sf-color-surface-raised);
+}
+
+.sf-activity-dot {
+  flex: 0 0 auto;
+  width: var(--sf-icon-sm);
+  height: var(--sf-icon-sm);
+  border-radius: 50%;
+  background: var(--sf-color-accent-text);
+}
+
+.sf-activity-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--sf-font-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-activity-meta {
+  flex: 0 0 auto;
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+}
+
+/* --------------------------------------------------------------------------
+   技能库：左分类 facet + 右工具条 + 网格
+   -------------------------------------------------------------------------- */
+.sf-lib {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-4);
+}
+
+.sf-facets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  padding: var(--sf-space-4);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-color-surface);
+}
+
+.sf-facet-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+
+.sf-facet-legend {
+  font-size: var(--sf-font-sm);
+  font-weight: var(--sf-weight-semibold);
+  color: var(--sf-color-text);
+}
+
+.sf-facet-all {
+  align-self: flex-start;
+}
+
+.sf-facet-opt {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-1) var(--sf-space-2);
+  border-radius: var(--sf-radius-sm);
+  font-size: var(--sf-font-sm);
+  color: var(--sf-color-text-2);
+  cursor: pointer;
+}
+
+.sf-facet-opt:hover {
+  background: var(--sf-color-surface-raised);
+}
+
+.sf-facet-count {
+  margin-left: auto;
+  color: var(--sf-color-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.sf-facet-opt input {
+  accent-color: var(--sf-color-accent);
+}
+
+.sf-lib-main {
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+   技能详情
+   -------------------------------------------------------------------------- */
+.sf-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-3);
+  margin-bottom: var(--sf-space-4);
+}
+
+.sf-detail-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sf-detail-name {
+  font-size: var(--sf-font-xl);
+  font-weight: var(--sf-weight-bold);
+  line-height: var(--sf-line-tight);
+}
+
+.sf-detail-meta {
+  margin-top: var(--sf-space-1);
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-sm);
+}
+
+.sf-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+}
+
+.sf-kv {
+  display: grid;
+  grid-template-columns: minmax(var(--sf-kv-key-min), var(--sf-kv-key-max)) minmax(0, 1fr);
+  gap: var(--sf-space-2) var(--sf-space-4);
+  margin: 0;
+}
+
+.sf-kv dt {
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-sm);
+}
+
+.sf-kv dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--sf-color-text);
+  font-size: var(--sf-font-sm);
+  overflow-wrap: anywhere;
+}
+
+.sf-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  padding: 0 var(--sf-space-2);
+  border-radius: var(--sf-radius-pill);
+  font-size: var(--sf-font-xs);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+}
+
+.sf-status-pill.is-on {
+  border-color: var(--sf-color-accent-line);
+  color: var(--sf-color-accent-text);
+}
+
+.sf-status-pill.is-off {
+  border-color: var(--sf-color-border-strong);
+  color: var(--sf-color-text-3);
+}
+
+/* 路由试验台高级折叠 + 历史下拉 */
+.sf-advanced[open] .sf-advanced-sum {
+  color: var(--sf-color-accent-text);
+}
+
+.sf-advanced-sum {
+  cursor: pointer;
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-sm);
+  font-weight: var(--sf-weight-medium);
+}
+
+.sf-advanced-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-2);
+  margin-top: var(--sf-space-3);
+}
+
+/* --------------------------------------------------------------------------
+   工作台
+   -------------------------------------------------------------------------- */
+.sf-wb {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-4);
+}
+
+.sf-wb-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-3);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-color-surface);
+}
+
+.sf-wb-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  width: 100%;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border: var(--sf-hairline) solid transparent;
+  border-radius: var(--sf-radius-md);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-wb-item:hover {
+  background: var(--sf-color-surface-raised);
+}
+
+.sf-wb-item.is-current {
+  border-color: var(--sf-color-accent-line);
+  background: var(--sf-color-accent-soft);
+}
+
+.sf-wb-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--sf-font-base);
+  font-weight: var(--sf-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-wb-item-src {
+  flex: 0 0 auto;
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+}
+
+.sf-wb-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-3);
+}
+
+.sf-wb-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-2);
+}
+
+.sf-wb-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-space-3);
+}
+
+.sf-textarea {
+  width: 100%;
+  min-height: var(--sf-textarea-h);
+  padding: var(--sf-space-3);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-input);
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-font-sm);
+  line-height: var(--sf-line-normal);
+  resize: vertical;
+  transition: border-color var(--sf-dur-base) var(--sf-ease-out);
+}
+
+.sf-textarea:hover {
+  border-color: var(--sf-color-border-strong);
+}
+
+.sf-preview {
+  min-height: var(--sf-textarea-h);
+  padding: var(--sf-space-3);
+  border: var(--sf-hairline) solid var(--sf-color-border-soft);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-surface);
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sf-var {
+  padding: 0 var(--sf-space-1);
+  border-radius: var(--sf-radius-xs);
+  background: var(--sf-color-accent-soft);
+  color: var(--sf-color-accent-text);
+  font-family: var(--sf-font-mono);
+}
+
+.sf-wb-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding-top: var(--sf-space-2);
+  border-top: var(--sf-hairline) solid var(--sf-color-border-soft);
+}
+
+.sf-dirty-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  color: var(--sf-color-warn);
+  font-size: var(--sf-font-xs);
+  font-weight: var(--sf-weight-medium);
+}
+
+.sf-dirty-dot::before {
+  content: "";
+  width: var(--sf-icon-sm);
+  height: var(--sf-icon-sm);
+  border-radius: 50%;
+  background: var(--sf-color-warn);
+}
+
+.sf-dirty-dot[hidden] {
+  display: none;
+}
+
+.sf-wb-foot .sf-btn--ghost {
+  margin-left: auto;
+}
+
+/* --------------------------------------------------------------------------
+   团队市场
+   -------------------------------------------------------------------------- */
+.sf-segment {
+  display: inline-flex;
+  padding: var(--sf-space-1);
+  border: var(--sf-hairline) solid var(--sf-color-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-surface);
+  gap: var(--sf-space-1);
+}
+
+.sf-segment button {
+  min-height: var(--sf-control-sm);
+  padding: 0 var(--sf-space-3);
+  border: 0;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-color-text-2);
+  font-size: var(--sf-font-sm);
+  font-weight: var(--sf-weight-medium);
+  cursor: pointer;
+}
+
+.sf-segment button.is-on {
+  background: var(--sf-color-accent-soft);
+  color: var(--sf-color-accent-text);
+}
+
+.sf-market-rate {
+  color: var(--sf-color-warn);
+  font-size: var(--sf-font-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 设置 */
+.sf-settings-group + .sf-settings-group {
+  margin-top: var(--sf-space-5);
+}
+
+.sf-set-row {
+  display: grid;
+  grid-template-columns: minmax(var(--sf-set-key-min), var(--sf-set-key-max)) minmax(0, 1fr);
+  gap: var(--sf-space-3);
+  align-items: center;
+  padding: var(--sf-space-3) 0;
+  border-top: var(--sf-hairline) solid var(--sf-color-border-soft);
+}
+
+.sf-set-row:first-of-type {
+  border-top: 0;
+}
+
+.sf-set-label {
+  font-size: var(--sf-font-base);
+  font-weight: var(--sf-weight-medium);
+}
+
+.sf-set-desc {
+  color: var(--sf-color-text-3);
+  font-size: var(--sf-font-xs);
+}
+
+.sf-set-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.sf-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  font-size: var(--sf-font-sm);
+  color: var(--sf-color-text-2);
+  cursor: pointer;
+}
+
+.sf-radio input {
+  accent-color: var(--sf-color-accent);
+}
+
+.sf-confirm {
+  padding: var(--sf-space-4);
+  border: var(--sf-hairline) solid var(--sf-color-danger);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-danger-soft);
+}
+
+/* 响应式：≥480 / 768 / 1200（断点值只能写成字面量，集中在此） */
+@media (min-width: 480px) {
+  .sf-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .sf-lab-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .sf-advanced-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .sf-wb-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .sf-side {
+    position: static;
+    transform: none;
+    z-index: var(--sf-z-nav);
+    box-shadow: none;
+    flex: 0 0 var(--sf-nav-w);
+    width: var(--sf-nav-w);
+  }
+
+  .sf-shell-app.nav-open .sf-side {
+    box-shadow: none;
+  }
+
+  .sf-side-scrim {
+    display: none;
+  }
+
+  .sf-hamburger {
+    display: none;
+  }
+
+  .sf-nav-collapse {
+    display: inline-flex;
+  }
+
+  .sf-panel {
+    padding: var(--sf-space-5);
+  }
+
+  .sf-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sf-lib {
+    grid-template-columns: var(--sf-filter-min-w) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .sf-facets {
+    position: sticky;
+    top: calc(var(--sf-topbar-h) + var(--sf-space-4));
+  }
+
+  /* 折叠态：仅图标 + tooltip（64px） */
+  .sf-shell-app.is-collapsed .sf-side {
+    flex-basis: var(--sf-nav-w-collapsed);
+    width: var(--sf-nav-w-collapsed);
+  }
+
+  .sf-shell-app.is-collapsed .sf-nav-label,
+  .sf-shell-app.is-collapsed .sf-side-head-text,
+  .sf-shell-app.is-collapsed .sf-side-foot {
+    display: none;
+  }
+
+  .sf-shell-app.is-collapsed .sf-nav-link {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .sf-shell-app.is-collapsed .sf-nav-collapse {
+    margin: 0 auto;
+  }
+
+  #sf-main {
+    padding: var(--sf-space-6) var(--sf-space-5) var(--sf-space-8);
+  }
+}
+
+@media (min-width: 1200px) {
+  .sf-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .sf-wb {
+    grid-template-columns: var(--sf-wb-aside-w) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .sf-wb-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .sf-detail {
+    display: grid;
+    grid-template-columns: var(--sf-detail-aside-w) minmax(0, 1fr);
+    gap: var(--sf-space-5);
+    align-items: start;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   降低动效偏好：关闭所有过渡与动画
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+
+  .sf-spinner {
+    animation: none;
+    border-top-color: currentColor;
+    opacity: 0.6;
+  }
+
+  .sf-side {
+    transition: none;
+  }
+
+  .sf-skip {
+    transform: translateY(0);
+    position: static;
+    display: inline-block;
+  }
+}
+</style>
+</head>
+<body>
+<a class="sf-skip" href="#sf-main">跳到主要内容</a>
+
+<div class="sf-shell-app" id="sf-app">
+  <aside class="sf-side" id="sf-side" aria-label="侧边导航">
+    <div class="sf-side-head">
+      <span class="sf-logo" aria-hidden="true">S</span>
+      <span class="sf-side-head-text">
+        <span class="sf-side-title">SkillForge</span>
+        <span class="sf-side-sub">本地技能资产</span>
+      </span>
+      <button class="sf-nav-collapse" id="sf-collapse" type="button"
+              aria-label="折叠侧边栏" aria-pressed="false" title="折叠侧边栏">«</button>
+    </div>
+    <nav class="sf-nav" aria-label="主导航">
+      <ul class="sf-nav-list" id="sf-nav-list">
+        <li><a class="sf-nav-link" href="#/overview" data-route="overview" aria-label="概览">
+          <span class="sf-nav-ico" aria-hidden="true">▦</span><span class="sf-nav-label">概览</span></a></li>
+        <li><a class="sf-nav-link" href="#/library" data-route="library" aria-label="技能库">
+          <span class="sf-nav-ico" aria-hidden="true">▤</span><span class="sf-nav-label">技能库</span></a></li>
+        <li><a class="sf-nav-link" href="#/lab" data-route="lab" aria-label="路由试验台">
+          <span class="sf-nav-ico" aria-hidden="true">⇄</span><span class="sf-nav-label">路由试验台</span></a></li>
+        <li><a class="sf-nav-link" href="#/workbench" data-route="workbench" aria-label="工作台">
+          <span class="sf-nav-ico" aria-hidden="true">✎</span><span class="sf-nav-label">工作台</span></a></li>
+        <li><a class="sf-nav-link" href="#/market" data-route="market" aria-label="团队市场">
+          <span class="sf-nav-ico" aria-hidden="true">⧉</span><span class="sf-nav-label">团队市场</span></a></li>
+        <li><a class="sf-nav-link" href="#/settings" data-route="settings" aria-label="设置">
+          <span class="sf-nav-ico" aria-hidden="true">⚙</span><span class="sf-nav-label">设置</span></a></li>
+      </ul>
+    </nav>
+    <div class="sf-side-foot">
+      <span class="sf-chip">本机 · 断网可用</span>
+    </div>
+  </aside>
+
+  <div class="sf-side-scrim" id="sf-scrim" hidden></div>
+
+  <div class="sf-shell-body">
+    <header class="sf-topbar">
+      <button class="sf-hamburger" id="sf-hamburger" type="button"
+              aria-label="打开导航" aria-expanded="false" aria-controls="sf-side">☰</button>
+      <h1 class="sf-topbar-title" id="sf-page-title">概览</h1>
+      <div class="sf-topbar-tools">
+        <form class="sf-topbar-search" id="sf-gsearch-form" role="search">
+          <label class="sf-sr-only" for="sf-gsearch">全局搜索技能</label>
+          <input class="sf-input sf-input--sm" id="sf-gsearch" type="search"
+                 autocomplete="off" placeholder="搜索技能…">
+        </form>
+        <span class="sf-chip" id="sf-data-pill" title="数据来自本机，无需联网">本机数据</span>
+        <div id="sf-topbar-action"></div>
+      </div>
+    </header>
+
+    <div class="sf-statusbar" id="sf-statusbar" role="status" aria-live="polite" hidden></div>
+
+    <main id="sf-main" tabindex="-1"></main>
+
+    <footer class="sf-footer">
+      <p>SkillForge 本地控制台 · 数据仅存本机 · 零外部依赖，断网可用</p>
+    </footer>
+  </div>
+</div>
+
+<div class="sf-toast" id="sf-toast" role="status" aria-live="polite" hidden></div>
+<div class="sf-sr-only" id="sf-route-live" aria-live="polite"></div>
+
+<script>
+const SKILLS = __SKILLS__;
+const STATS = __STATS__;
+
+(function () {
+  'use strict';
+
+  /* ========================================================================
+     常量
+     ======================================================================== */
+  const FETCH_TIMEOUT_MS = 15000;
+  const FILTER_DEBOUNCE_MS = 150;
+  const COPY_FEEDBACK_MS = 2000;
+  const TOAST_MS = 2600;
+  const TAG_LIMIT = 5;
+  const SCORE_DIGITS = 2;
+  /* 阈值来源：/api/stats 与 /api/match 当前都不下发 threshold，
+     写死后端默认值，见 sfx/infra/conf.py:27 DEFAULT_THRESHOLD = 0.22 */
+  const DEFAULT_THRESHOLD = 0.22;
+  const MS_PER_SECOND = 1000;
+  const SPINNER_LABEL = '匹配中…';
+  const SUBMIT_LABEL = '匹配';
+  const LIB_COUNT = 5;
+  const LS = {
+    theme: 'sf:theme',
+    settings: 'sf:settings',
+    workbench: 'sf:workbench',
+    dismiss: 'sf:dismiss',
+    labHistory: 'sf:lab:history'
+  };
+
+  const ESCAPE_MAP = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  };
+
+  /* ========================================================================
+     错误类型：区分超时 / 网络 / 服务端，便于给出可操作提示
+     ======================================================================== */
+  class SfxError extends Error {
+    constructor(message, kind) {
+      super(message);
+      this.name = 'SfxError';
+      this.kind = kind || 'unknown';
+    }
+  }
+
+  /* ========================================================================
+     纯函数工具
+     ======================================================================== */
+  function str(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    return String(value).trim();
+  }
+
+  function toCount(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num < 0) {
+      return 0;
+    }
+    return Math.floor(num);
+  }
+
+  function escapeHtml(value) {
+    const text = (value === null || value === undefined) ? '' : String(value);
+    return text.replace(/[&<>"']/g, function (ch) {
+      return ESCAPE_MAP[ch];
+    });
+  }
+
+  function formatScore(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      return '—';
+    }
+    return num.toFixed(SCORE_DIGITS);
+  }
+
+  /* ========================================================================
+     采纳率（唯一来源：GET /api/scores 的真实埋点）
+     —— 页面**不计算、不估算、不占位**任何分数。
+        没有记录 / 样本不足 / 接口失败，一律渲染成「数据不足」，绝不出 0%。
+     ======================================================================== */
+  const scoreState = {
+    status: 'idle',   // idle | loading | ok | error
+    minSample: null,  // 由接口下发，页面不硬编码
+    map: {}           // skill_id -> { shown, loaded, load_rate, n }
+  };
+
+  function scoreEntry(skill) {
+    const id = str(skill && skill.id);
+    if (!id) { return null; }
+    const raw = scoreState.map[id];
+    if (!raw || typeof raw !== 'object') { return null; }
+    const rateRaw = (raw.load_rate === null || raw.load_rate === undefined)
+      ? null : Number(raw.load_rate);
+    return {
+      shown: toCount(raw.shown),
+      loaded: toCount(raw.loaded),
+      feedback: toCount(raw.feedback),
+      rate: Number.isFinite(rateRaw) ? Math.min(1, Math.max(0, rateRaw)) : null
+    };
+  }
+
+  /* kind：none 无记录 / sample 样本不足 / rate 真实采纳率（含 0%，load 事件已接入） */
+  function scoreInfo(skill) {
+    const entry = scoreEntry(skill);
+    if (!entry) {
+      return { kind: 'none', shown: 0, loaded: 0, feedback: 0, rate: null };
+    }
+    if (entry.rate === null) {
+      return { kind: 'sample', shown: entry.shown, loaded: entry.loaded, feedback: entry.feedback, rate: null };
+    }
+    return { kind: 'rate', shown: entry.shown, loaded: entry.loaded, feedback: entry.feedback, rate: entry.rate };
+  }
+
+  /* 两态：有真实采纳率 / 数据不足（不再用 80、60 这种阈值套在假分上） */
+  function scoreTier(info) {
+    return info && info.kind === 'rate' ? 'data' : 'insufficient';
+  }
+
+  function scorePercent(rate) {
+    return Math.round(Number(rate) * 100);
+  }
+
+  function sampleGap(info) {
+    if (scoreState.minSample === null) { return null; }
+    return Math.max(0, toCount(scoreState.minSample) - info.shown);
+  }
+
+  function scoreTitle(info) {
+    if (info.kind === 'none') {
+      if (scoreState.status === 'error') {
+        return '采纳数据未取到（/api/scores 不可用）';
+      }
+      if (scoreState.status === 'loading' || scoreState.status === 'idle') {
+        return '采纳数据加载中';
+      }
+      return '尚无推荐';
+    }
+    if (info.kind === 'sample') {
+      const gap = sampleGap(info);
+      return gap === null
+        ? ('已推荐 ' + info.shown + ' 次，样本不足')
+        : ('已推荐 ' + info.shown + ' 次，还差 ' + gap + ' 次推荐可展示采纳率');
+    }
+    return '采纳率 ' + scorePercent(info.rate) + '% · ' + info.loaded + '/' + info.shown;
+  }
+
+  /* 卡片与详情共用：三段式（推荐/采纳/样本不足），读屏用 title 里的完整解释 */
+  function scoreBadgeHtml(skill) {
+    const info = scoreInfo(skill);
+    let text;
+    if (info.kind === 'rate') {
+      text = '采纳率 ' + scorePercent(info.rate) + '% · ' + info.loaded + '/' + info.shown;
+    } else if (info.kind === 'sample') {
+      text = '数据不足 · ' + info.shown + ' 次';
+    } else {
+      text = '尚无推荐';
+    }
+    const tone = info.kind === 'rate' ? 'rate' : 'none';
+    const label = scoreTitle(info);
+    return '<span class="sf-score-badge sf-score-badge--' + tone + '" title="'
+      + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '">'
+      + escapeHtml(text) + '</span>';
+  }
+
+  /* 误推荐计数：feedback > 0 才显示，弱化 danger 色，不吓人 */
+  function feedbackBadgeHtml(skill) {
+    const entry = scoreEntry(skill);
+    const n = entry ? entry.feedback : 0;
+    if (n <= 0) { return ''; }
+    const label = '被标记误推荐 ' + n + ' 次';
+    return '<span class="sf-feedback-badge" title="' + escapeHtml(label)
+      + '" aria-label="' + escapeHtml(label) + '">' + escapeHtml('误推荐 ' + n) + '</span>';
+  }
+
+  /* 详情页：徽标 + 误推荐 + 一行说明，说明里带上样本量，避免被读成"没人用" */
+  function scoreDetailHtml(skill) {
+    const info = scoreInfo(skill);
+    let note;
+    if (info.kind === 'rate') {
+      note = '推荐 ' + info.shown + ' 次 / 采纳 ' + info.loaded + ' 次';
+    } else if (info.kind === 'sample') {
+      const gap = sampleGap(info);
+      note = gap === null
+        ? '样本不足'
+        : ('还差 ' + gap + ' 次推荐可展示采纳率');
+    } else {
+      note = scoreState.status === 'error'
+        ? '采纳数据未取到，按尚无推荐处理'
+        : '该技能还未出现在路由卡里';
+    }
+    return scoreBadgeHtml(skill) + ' ' + feedbackBadgeHtml(skill)
+      + ' <span class="sf-hint">' + escapeHtml(note) + '</span>';
+  }
+
+  function isAttached(node) {
+    return !!(node && document.body && document.body.contains(node));
+  }
+
+  /* 分数到达后原地更新：不重走 render()，避免触发读屏播报噪音 */
+  function onScoresUpdated() {
+    const cell = document.getElementById('sf-dt-score');
+    if (cell && state.detailSkill) {
+      cell.innerHTML = scoreDetailHtml(state.detailSkill);
+    }
+    if (dom.grid && isAttached(dom.grid)) {
+      applyLibraryFilter();
+    }
+  }
+
+  async function loadScores() {
+    scoreState.status = 'loading';
+    try {
+      const payload = await fetchJson('/api/scores');
+      const scores = payload.scores;
+      if (!scores || typeof scores !== 'object') {
+        throw new SfxError('分数响应缺少 scores 字段', 'server');
+      }
+      scoreState.map = scores;
+      const minSample = Number(payload.min_sample);
+      scoreState.minSample = Number.isFinite(minSample) ? minSample : null;
+      scoreState.status = 'ok';
+    } catch (error) {
+      // 500 / 网络错：全部按"数据不足"处理，页面其余部分照常
+      scoreState.map = {};
+      scoreState.minSample = null;
+      scoreState.status = 'error';
+    }
+    onScoresUpdated();
+  }
+
+  /* 小型拼音/首字母映射：覆盖常用字；未知 CJK 回退为字符本身（仍可按中文精确搜） */
+  const PINYIN_MAP = {
+    '张': 'zhang', '王': 'wang', '李': 'li', '赵': 'zhao', '刘': 'liu', '陈': 'chen', '杨': 'yang',
+    '黄': 'huang', '周': 'zhou', '吴': 'wu', '徐': 'xu', '孙': 'sun', '马': 'ma', '朱': 'zhu',
+    '胡': 'hu', '林': 'lin', '郭': 'guo', '何': 'he', '高': 'gao', '罗': 'luo', '郑': 'zheng',
+    '梁': 'liang', '谢': 'xie', '宋': 'song', '唐': 'tang', '许': 'xu', '韩': 'han', '冯': 'feng',
+    '邓': 'deng', '曹': 'cao', '彭': 'peng', '曾': 'zeng', '肖': 'xiao', '田': 'tian', '董': 'dong',
+    '袁': 'yuan', '潘': 'pan', '于': 'yu', '蒋': 'jiang', '蔡': 'cai', '余': 'yu', '杜': 'du',
+    '叶': 'ye', '程': 'cheng', '苏': 'su', '魏': 'wei', '吕': 'lv', '丁': 'ding', '任': 'ren',
+    '沈': 'shen', '姚': 'yao', '卢': 'lu', '傅': 'fu', '钟': 'zhong', '姜': 'jiang', '崔': 'cui',
+    '谭': 'tan', '廖': 'liao', '范': 'fan', '汪': 'wang', '陆': 'lu', '戴': 'dai',
+    '扫': 'sao', '描': 'miao', '匹': 'pi', '配': 'pei', '路': 'lu', '由': 'you', '提': 'ti',
+    '示': 'shi', '词': 'ci', '埋': 'mai', '点': 'dian', '部': 'bu', '署': 'shu', '发': 'fa',
+    '布': 'bu', '监': 'jian', '控': 'kong', '工': 'gong', '具': 'ju', '智': 'zhi', '能': 'neng',
+    '数': 'shu', '据': 'ju', '库': 'ku', '文': 'wen', '档': 'dang', '安': 'an', '全': 'quan',
+    '测': 'ce', '试': 'shi', '管': 'guan', '理': 'li', '优': 'you', '化': 'hua', '性': 'xing',
+    '快': 'kuai', '慢': 'man', '云': 'yun', '端': 'duan', '本': 'ben', '地': 'di', '图': 'tu',
+    '片': 'pian', '音': 'yin', '频': 'pin', '视': 'shi', '会': 'hui', '社': 'she', '区': 'qu'
+  };
+  const pyCache = new Map();
+  function pinyinOf(text) {
+    const key = str(text);
+    if (pyCache.has(key)) { return pyCache.get(key); }
+    const chars = Array.from(key.toLowerCase());
+    let out = '';
+    let initials = '';
+    for (let i = 0; i < chars.length; i++) {
+      const c = chars[i];
+      if (/[a-z0-9]/.test(c)) {
+        out += c;
+      } else if (PINYIN_MAP[c]) {
+        out += PINYIN_MAP[c];
+        initials += PINYIN_MAP[c].charAt(0);
+      } else if (/[一-鿿]/.test(c)) {
+        out += c; // 未知中文：保留原字，仍可中文精确匹配
+        initials += c;
+      } else {
+        out += c;
+        initials += c;
+      }
+    }
+    const value = out + ' ' + initials;
+    pyCache.set(key, value);
+    return value;
+  }
+
+  function matchTerm(skill, q) {
+    if (!q) { return null; }
+    const fields = [str(skill.name), str(skill.summary)].concat(skill.tags.map(str));
+    for (let i = 0; i < fields.length; i++) {
+      if (fields[i].toLowerCase().indexOf(q) !== -1) { return q; }
+    }
+    if (pinyinOf(skill.name + ' ' + skill.summary + ' ' + skill.tags.join(' ')).indexOf(q) !== -1) { return q; }
+    return null;
+  }
+
+  function highlight(text, q) {
+    const raw = str(text);
+    if (!q) { return escapeHtml(raw); }
+    const hay = raw.toLowerCase();
+    const idx = hay.indexOf(q);
+    if (idx === -1) { return escapeHtml(raw); }
+    return escapeHtml(raw.slice(0, idx))
+      + '<mark class="sf-mark">' + escapeHtml(raw.slice(idx, idx + q.length)) + '</mark>'
+      + escapeHtml(raw.slice(idx + q.length));
+  }
+
+  function formatTimestamp(value) {
+    const raw = str(value);
+    if (!raw) {
+      return '';
+    }
+    if (raw.indexOf('1970-01-01') === 0) {
+      return '';
+    }
+    const matched = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(raw);
+    if (matched) {
+      return matched[1] + '-' + matched[2] + '-' + matched[3] + ' ' + matched[4] + ':' + matched[5];
+    }
+    return raw;
+  }
+
+  function firstChar(value) {
+    const chars = Array.from(str(value));
+    return chars.length > 0 ? chars[0] : '·';
+  }
+
+  function codeTag(text) {
+    return '<code class="sf-code">' + escapeHtml(text) + '</code>';
+  }
+
+  /* 路径脱敏：只保留 …/skills/xxx/SKILL.md 尾巴，完整值由「复制完整路径」按钮提供 */
+  function maskPath(path) {
+    const raw = str(path);
+    if (!raw) { return ''; }
+    const norm = raw.replace(/\\/g, '/');
+    const idx = norm.indexOf('/skills/');
+    if (idx !== -1) {
+      return '…' + norm.slice(idx);
+    }
+    const parts = norm.split('/').filter(Boolean);
+    if (parts.length > 3) {
+      return '…/' + parts.slice(-3).join('/');
+    }
+    return raw;
+  }
+
+  function timeoutSeconds() {
+    return String(Math.round(FETCH_TIMEOUT_MS / MS_PER_SECOND));
+  }
+
+  function nowIso() {
+    try {
+      return new Date().toISOString().slice(0, 16).replace('T', ' ');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function $(sel, root) {
+    return (root || document).querySelector(sel);
+  }
+
+  function $$(sel, root) {
+    return Array.prototype.slice.call((root || document).querySelectorAll(sel));
+  }
+
+  /* ========================================================================
+     数据归一化：服务端字段一律按契约读取，缺失时给出安全默认值
+     ======================================================================== */
+  function normalizeSkill(raw, index) {
+    const src = (raw && typeof raw === 'object') ? raw : {};
+    const tags = Array.isArray(src.tags) ? src.tags.map(str).filter(Boolean) : [];
+    const triggers = Array.isArray(src.triggers) ? src.triggers.map(str).filter(Boolean) : [];
+    return {
+      id: str(src.id) || ('skill-' + index),
+      name: str(src.name) || ('未命名技能 #' + (index + 1)),
+      slug: str(src.slug),
+      summary: str(src.summary),
+      summaryFallback: src.summary_fallback === true,
+      version: str(src.version) || '1',
+      author: str(src.author),
+      tags: tags,
+      triggers: triggers,
+      path: str(src.path),
+      enabled: src.enabled === false ? false : true,
+      _order: index // 原始顺序：排序回退与"数据不足"组内保序都靠它
+    };
+  }
+
+  function normalizeSkills(raw) {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.map(normalizeSkill);
+  }
+
+  function normalizeMatches(raw, explainRaw) {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    const explains = Array.isArray(explainRaw) ? explainRaw : [];
+    return raw.map(function (item, index) {
+      const src = (item && typeof item === 'object') ? item : {};
+      const exp = (explains[index] && typeof explains[index] === 'object') ? explains[index] : null;
+      return {
+        id: str(src.skill_id) || str(src.id),
+        name: str(src.name) || ('未命名技能 #' + (index + 1)),
+        path: str(src.path),
+        score: Number(src.score),
+        reason: str(src.reason),
+        explain: exp
+      };
+    });
+  }
+
+  /* ========================================================================
+     状态
+     ======================================================================== */
+  const state = {
+    skills: [],
+    filtered: [],
+    matches: [],
+    detailSkill: null,
+    query: '',
+    matchBusy: false,
+    refreshBusy: false,
+    lastTask: ''
+  };
+
+  const dom = {};
+  let filterTimer = 0;
+  let pendingQuery = '';
+  const statusState = { items: {}, dismiss: loadDismiss() };
+
+  /* ========================================================================
+     DOM 缓存
+     ======================================================================== */
+  function cacheDom() {
+    dom.app = document.getElementById('sf-app');
+    dom.side = document.getElementById('sf-side');
+    dom.scrim = document.getElementById('sf-scrim');
+    dom.hamburger = document.getElementById('sf-hamburger');
+    dom.collapse = document.getElementById('sf-collapse');
+    dom.main = document.getElementById('sf-main');
+    dom.statusbar = document.getElementById('sf-statusbar');
+    dom.toast = document.getElementById('sf-toast');
+    dom.routeLive = document.getElementById('sf-route-live');
+    dom.pageTitle = document.getElementById('sf-page-title');
+    dom.topbarAction = document.getElementById('sf-topbar-action');
+    dom.gsearchForm = document.getElementById('sf-gsearch-form');
+    dom.gsearch = document.getElementById('sf-gsearch');
+    dom.dataPill = document.getElementById('sf-data-pill');
+    dom.navList = document.getElementById('sf-nav-list');
+    dom.form = null;
+    dom.task = null;
+    dom.submit = null;
+    dom.result = null;
+    dom.refresh = null;
+    dom.filter = null;
+    dom.filterClear = null;
+    dom.count = null;
+    dom.grid = null;
+    dom.gridState = null;
+  }
+
+  /* ========================================================================
+     网络层：统一超时中断 + 统一错误分类
+     ======================================================================== */
+  async function fetchJson(url, options) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(function () {
+      controller.abort();
+    }, FETCH_TIMEOUT_MS);
+    const init = Object.assign(
+      { method: 'GET', signal: controller.signal, headers: { Accept: 'application/json' } },
+      options || {}
+    );
+    try {
+      const response = await fetch(url, init);
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (parseError) {
+        payload = null;
+      }
+      if (payload === null || typeof payload !== 'object') {
+        throw new SfxError('响应不是合法 JSON（HTTP ' + response.status + '）', 'server');
+      }
+      if (!response.ok || payload.ok !== true) {
+        const detail = str(payload.error) || ('请求失败（HTTP ' + response.status + '）');
+        throw new SfxError(detail, 'server');
+      }
+      return payload;
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        throw new SfxError('请求超过 ' + timeoutSeconds() + ' 秒仍未返回，已中断', 'timeout');
+      }
+      if (error instanceof SfxError) {
+        throw error;
+      }
+      throw new SfxError('无法连接本地服务（' + str(error && error.message) + '）', 'network');
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  async function requestMatch(task) {
+    return fetchJson('/api/match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ task: task })
+    });
+  }
+
+  /* ========================================================================
+     剪贴板：优先 Clipboard API，失败降级 execCommand
+     ======================================================================== */
+  function copyWithTextarea(value) {
+    const helper = document.createElement('textarea');
+    helper.value = value;
+    helper.setAttribute('readonly', 'readonly');
+    helper.setAttribute('aria-hidden', 'true');
+    helper.tabIndex = -1;
+    helper.style.position = 'fixed';
+    helper.style.top = '0';
+    helper.style.left = '0';
+    helper.style.width = '1px';
+    helper.style.height = '1px';
+    helper.style.padding = '0';
+    helper.style.border = 'none';
+    helper.style.opacity = '0';
+    helper.style.pointerEvents = 'none';
+    document.body.appendChild(helper);
+
+    const selection = document.getSelection();
+    const previousRange = (selection && selection.rangeCount > 0) ? selection.getRangeAt(0) : null;
+
+    let copied = false;
+    try {
+      helper.select();
+      helper.setSelectionRange(0, value.length);
+      copied = document.execCommand('copy');
+    } catch (error) {
+      copied = false;
+    }
+
+    document.body.removeChild(helper);
+
+    if (selection && previousRange) {
+      selection.removeAllRanges();
+      selection.addRange(previousRange);
+    }
+    return copied;
+  }
+
+  async function copyText(value) {
+    const text = str(value);
+    if (!text) {
+      return false;
+    }
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (error) {
+        // 权限被拒或非安全上下文：走下面的降级路径
+      }
+    }
+    return copyWithTextarea(text);
+  }
+
+  function flashCopyFeedback(button, succeeded) {
+    if (!button.dataset.label) {
+      button.dataset.label = button.textContent;
+    }
+    button.textContent = succeeded ? '已复制' : '复制失败';
+    button.classList.toggle('is-ok', succeeded);
+    button.classList.toggle('is-fail', !succeeded);
+    button.disabled = true;
+    window.setTimeout(function () {
+      button.textContent = button.dataset.label;
+      button.classList.remove('is-ok', 'is-fail');
+      button.disabled = false;
+    }, COPY_FEEDBACK_MS);
+  }
+
+  /* ========================================================================
+     Toast（轻提示，不占自报条）
+     ======================================================================== */
+  let toastTimer = 0;
+  function showToast(message, kind) {
+    dom.toast.hidden = false;
+    dom.toast.textContent = message;
+    dom.toast.classList.toggle('is-ok', kind === 'ok');
+    dom.toast.classList.toggle('is-fail', kind === 'fail');
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function () {
+      dom.toast.hidden = true;
+    }, TOAST_MS);
+  }
+
+  /* ========================================================================
+     渲染：统计卡（复用 .sf-stats，支持容器作用域）
+     ======================================================================== */
+  function renderStatsInto(root, source) {
+    const stats = (source && typeof source === 'object') ? source : {};
+    const total = toCount(stats.total);
+    const active = toCount(stats.active);
+    const scannedAt = formatTimestamp(stats.last_scanned_at);
+
+    const totalEl = root.querySelector('[data-stat="total"]');
+    const activeEl = root.querySelector('[data-stat="active"]');
+    const lastEl = root.querySelector('[data-stat="last"]');
+    const noteEl = root.querySelector('[data-stat="last-note"]');
+    const cardEl = root.querySelector('[data-stat="last-card"]');
+
+    if (totalEl) { totalEl.textContent = String(total); }
+    if (activeEl) { activeEl.textContent = String(active); }
+    if (lastEl) { lastEl.textContent = scannedAt || '从未扫描'; }
+    if (noteEl) { noteEl.hidden = !!scannedAt; }
+    if (cardEl) { cardEl.classList.toggle('sf-stat--warn', !scannedAt); }
+  }
+
+  /* ========================================================================
+     渲染：技能卡片（整卡可点进详情，复用 .sf-card）
+     ======================================================================== */
+  function skillCardHtml(skill) {
+    const key = encodeURIComponent(skill.slug || skill.id);
+    const shownTags = skill.tags.slice(0, TAG_LIMIT);
+    const extraCount = skill.tags.length - shownTags.length;
+    const tagItems = shownTags.map(function (tag) {
+      return '<li class="sf-tag">' + escapeHtml(tag) + '</li>';
+    });
+    if (extraCount > 0) {
+      const rest = skill.tags.slice(TAG_LIMIT).join('、');
+      tagItems.push(
+        '<li class="sf-tag sf-tag--more" title="' + escapeHtml(rest) + '">+' + extraCount + '</li>'
+      );
+    }
+
+    const metaParts = ['v' + skill.version];
+    if (skill.author) {
+      metaParts.push(skill.author);
+    }
+
+    const badge = skill.summaryFallback
+      ? '<span class="sf-badge" title="摘要由规则自动生成，可能不够准确">自动摘要</span>'
+      : '';
+
+    const summary = skill.summary
+      ? '<p class="sf-summary" title="' + escapeHtml(skill.summary) + '">'
+        + (state.query ? highlight(skill.summary, state.query) : escapeHtml(skill.summary)) + '</p>'
+      : '<p class="sf-summary sf-summary--empty">暂无摘要</p>';
+
+    const foot = skill.path
+      ? '<div class="sf-card-foot"><code class="sf-path" title="' + escapeHtml(skill.path) + '">'
+        + escapeHtml(maskPath(skill.path)) + '</code>'
+        + '<button class="sf-copy" type="button" data-copy-text="' + escapeHtml(skill.path)
+          + '" aria-label="复制完整路径：' + escapeHtml(skill.name) + '">复制完整路径</button></div>'
+      : '';
+
+    return [
+      '<a class="sf-card" href="#/library/' + key + '">',
+      '<div class="sf-card-head">',
+      '<span class="sf-avatar" aria-hidden="true">' + escapeHtml(firstChar(skill.name)) + '</span>',
+      '<div class="sf-card-title">',
+      '<h3 class="sf-card-name">' + (state.query ? highlight(skill.name, state.query) : escapeHtml(skill.name)) + '</h3>',
+      '<p class="sf-card-meta">' + escapeHtml(metaParts.join(' · ')) + '</p>',
+      '</div>',
+      badge,
+      scoreBadgeHtml(skill),
+      feedbackBadgeHtml(skill),
+      '</div>',
+      summary,
+      tagItems.length > 0 ? '<ul class="sf-tags">' + tagItems.join('') + '</ul>' : '',
+      foot,
+      '</a>'
+    ].filter(function (row) {
+      return row !== '';
+    }).join('');
+  }
+
+  /* ========================================================================
+     统一数据访问层（mock 与真实数据边界的唯一接缝）
+     —— 仅 /api/skills、/api/stats、/api/match 为真实接口；
+        其余页面用前端 mock，接后端后仅替换该方法体为 fetch。
+     ======================================================================== */
+  function readLS(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) { return fallback; }
+      return JSON.parse(raw);
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function writeLS(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function skillHrefForName(name) {
+    const s = state.skills.find(function (x) { return x.name === name; });
+    if (s) {
+      return '#/library/' + encodeURIComponent(s.slug || s.id);
+    }
+    return null;
+  }
+
+  function tagDomain(tag) {
+    const t = tag.toLowerCase();
+    if (/scan|扫描/.test(t)) { return 'Scan'; }
+    if (/match|路由|匹配|route/.test(t)) { return 'Match'; }
+    if (/prompt|提示词|提示/.test(t)) { return 'Prompt'; }
+    if (/track|埋点|事件|event/.test(t)) { return 'Track'; }
+    if (/deploy|部署|发布|release/.test(t)) { return 'Deploy'; }
+    return 'Other';
+  }
+
+  const WB_SEED = [
+    {
+      id: 'wb-welcome', name: '欢迎模板', description: '写给 Metis 的通用引导 Prompt',
+      source: 'local', updatedAt: nowIso(),
+      body: '你是一个严谨的助手。\n\n任务：{{task}}\n\n请先复述需求，再给出分步方案。'
+    },
+    {
+      id: 'wb-code-review', name: '代码评审', description: '对补丁给出可执行的评审意见',
+      source: 'local', updatedAt: nowIso(),
+      body: '请评审以下 {{language}} 代码改动：\n\n```\n{{diff}}\n```\n\n输出问题清单与修改建议。'
+    }
+  ];
+
+  const MARKET_SEED = [
+    { id: 'm-sql', name: 'SQL 优化器', author: 'team-alice', rating: 4.8, source: 'team',
+      summary: '把慢查询改写成带索引的执行计划。', tags: ['Match', 'Prompt'] },
+    { id: 'm-deploy', name: '灰度发布助手', author: 'team-bob', rating: 4.5, source: 'team',
+      summary: '生成安全的灰度发布 checklist。', tags: ['Deploy'] },
+    { id: 'm-scan', name: '本地扫描器', author: '本机', rating: 4.9, source: 'local',
+      summary: '快速扫描目录下的技能清单。', tags: ['Scan'] },
+    { id: 'm-track', name: '埋点规范', author: 'team-cara', rating: 4.2, source: 'team',
+      summary: '按统一 schema 生成事件埋点。', tags: ['Track'] }
+  ];
+
+  const SETTINGS_DEFAULT = {
+    theme: 'auto',
+    defaultSort: 'recent',
+    home: '（运行 sfx 的终端 HOME，详见终端输出）',
+    version: '1.0.0'
+  };
+
+  const dataSource = {
+    inlineSkills: function () { return state.skills; },
+    inlineStats: function () { return STATS; },
+    reloadSkills: async function () {
+      const payload = await fetchJson('/api/skills');
+      state.skills = normalizeSkills(payload.skills);
+      return state.skills;
+    },
+    match: async function (task) {
+      const payload = await requestMatch(task);
+      return {
+        matched: normalizeMatches(payload.matched, payload.explain),
+        explain: Array.isArray(payload.explain) ? payload.explain : []
+      };
+    },
+    libraryDetail: function (slug) {
+      const dec = decodeURIComponent(slug);
+      return state.skills.find(function (s) { return s.slug === dec; })
+        || state.skills.find(function (s) { return s.id === dec; })
+        || null;
+    },
+    recent: function (n) { return state.skills.slice(0, n || LIB_COUNT); },
+    workbenchList: function () {
+      const saved = readLS(LS.workbench, null);
+      if (Array.isArray(saved) && saved.length) { return saved; }
+      writeLS(LS.workbench, WB_SEED);
+      return WB_SEED.slice();
+    },
+    workbenchSave: function (items) { return writeLS(LS.workbench, items); },
+    marketList: function () { return MARKET_SEED.slice(); },
+    settingsGet: function () {
+      return Object.assign({}, SETTINGS_DEFAULT, readLS(LS.settings, {}));
+    },
+    settingsSave: function (s) { return writeLS(LS.settings, s); }
+  };
+
+  /* ========================================================================
+     渲染：技能库列表（含过滤空态 / 全空态）
+     ======================================================================== */
+  function updateCount() {
+    const total = state.skills.length;
+    const shown = state.filtered.length;
+    dom.count.textContent = state.query ? ('显示 ' + shown + ' / ' + total) : ('共 ' + total + ' 个');
+    if (dom.filterClear) { dom.filterClear.hidden = !state.query && !hasActiveFacets(); }
+  }
+
+  function showGridState(kind, html) {
+    dom.gridState.hidden = false;
+    dom.gridState.className = 'sf-state sf-state--' + kind;
+    dom.gridState.innerHTML = html;
+    dom.grid.hidden = true;
+  }
+
+  function hasActiveFacets() {
+    return !!(libFacet.authors.size || libFacet.tags.size || libFacet.domains.size
+      || libFacet.scoreBand || libFacet.query);
+  }
+
+  function renderSkillList() {
+    dom.grid.innerHTML = state.filtered.map(skillCardHtml).join('');
+    updateCount();
+
+    if (state.skills.length === 0) {
+      showGridState('empty', [
+        '<p class="sf-state-title">技能库还是空的</p>',
+        '<p class="sf-state-body">还没有任何技能入库。先在本机运行 ' + codeTag('sfx scan')
+          + ' 采集技能，再点「重新加载」。</p>'
+      ].join(''));
+      return;
+    }
+
+    if (state.filtered.length === 0) {
+      showGridState('empty-neutral', [
+        '<p class="sf-state-title">没有匹配的技能</p>',
+        '<p class="sf-state-body">试着清除部分筛选条件，或换一个更短的关键词。</p>'
+      ].join(''));
+      return;
+    }
+
+    dom.grid.hidden = false;
+    dom.gridState.hidden = true;
+    dom.gridState.innerHTML = '';
+  }
+
+  function matchesQuery(skill, query) {
+    // v2.0：兼容英文/中文子串 + 拼音/首字母（见 matchTerm / pinyinOf）
+    return !!matchTerm(skill, query);
+  }
+
+  /* ========================================================================
+     渲染：路由试验台（idle / loading / success / empty / error）
+     ======================================================================== */
+  function renderMatchIdle() {
+    dom.result.innerHTML = '<p class="sf-hint">输入任务后按回车或点「匹配」，'
+      + '这里会列出命中的技能、得分、命中原因与绝对路径。</p>';
+  }
+
+  function renderMatchLoading() {
+    dom.result.innerHTML = '<div class="sf-state sf-state--loading">'
+      + '<span class="sf-spinner" aria-hidden="true"></span>'
+      + '<span>正在匹配…</span></div>';
+  }
+
+  function renderMatchState(kind, title, bodyHtml, hintHtml, actionsHtml) {
+    const blocks = [
+      '<div class="sf-state sf-state--' + kind + '">',
+      '<p class="sf-state-title">' + escapeHtml(title) + '</p>',
+      bodyHtml ? '<p class="sf-state-body">' + bodyHtml + '</p>' : '',
+      hintHtml ? '<p class="sf-state-hint">' + hintHtml + '</p>' : '',
+      '</div>',
+      actionsHtml || ''
+    ];
+    dom.result.innerHTML = blocks.filter(function (block) {
+      return block !== '';
+    }).join('');
+  }
+
+  /* ========================================================================
+     可解释性：置信度徽标 / 并列提示 / 分项条形 / 命中词 / 同义词
+     —— explain 缺失时全部静默降级（不报错、不白屏、不画空块）
+     ======================================================================== */
+  function confidenceBadgeHtml(level) {
+    if (!level) { return ''; }
+    const tone = { '高': 'high', '中': 'mid', '低': 'low' }[level] || 'mid';
+    return '<span class="sf-conf sf-conf--' + tone + '" aria-label="置信度：' + escapeHtml(level) + '">'
+      + escapeHtml(level) + '</span>';
+  }
+
+  /* 把 reason 拆成 [置信度前缀] + 正文 + [并列后缀]，各自独立渲染 */
+  function splitReason(raw) {
+    const reason = str(raw);
+    if (!reason) { return { confidence: null, tie: false, text: '' }; }
+    let text = reason;
+    let confidence = null;
+    const cm = /^\s*\[(高|中|低)\]\s*/.exec(text);
+    if (cm) {
+      confidence = cm[1];
+      text = text.slice(cm[0].length);
+    }
+    let tie = false;
+    const tm = /（存在并列候选[^）]*）\s*$/.exec(text);
+    if (tm) {
+      tie = true;
+      text = text.slice(0, tm.index);
+    }
+    return { confidence: confidence, tie: tie, text: text };
+  }
+
+  /* 分项条形：只用 signals 的饱和分（0~1）画宽度，权重单独标注，不乘不臆造 */
+  function signalBarsHtml(exp) {
+    if (!exp || typeof exp !== 'object') { return ''; }
+    const signals = (exp.signals && typeof exp.signals === 'object') ? exp.signals : {};
+    const weights = (exp.weights && typeof exp.weights === 'object') ? exp.weights : {};
+    const rows = [
+      { key: 'keyword', label: '关键词' },
+      { key: 'tag', label: '标签' },
+      { key: 'history', label: '历史' }
+    ];
+    const items = rows.map(function (r) {
+      const s = Number(signals[r.key]);
+      const w = Number(weights[r.key]);
+      const pct = Number.isFinite(s) ? Math.round(Math.min(1, Math.max(0, s)) * 100) : 0;
+      const val = Number.isFinite(s) ? s.toFixed(2) : '—';
+      const wLabel = Number.isFinite(w) ? ('权重 ' + w.toFixed(2)) : '';
+      return '<div class="sf-explain-row">'
+        + '<span class="sf-explain-label">' + escapeHtml(r.label) + '</span>'
+        + '<span class="sf-explain-track"><span class="sf-explain-fill" style="width:' + pct + '%"></span></span>'
+        + '<span class="sf-explain-val">' + val + '</span>'
+        + (wLabel ? '<span class="sf-explain-w">' + escapeHtml(wLabel) + '</span>' : '')
+        + '</div>';
+    }).join('');
+    return '<div class="sf-explain-bars">' + items + '</div>';
+  }
+
+  function chipListHtml(items) {
+    const arr = Array.isArray(items) ? items.map(str).filter(Boolean) : [];
+    if (!arr.length) { return ''; }
+    return arr.map(function (t) {
+      return '<span class="sf-tag">' + escapeHtml(t) + '</span>';
+    }).join('');
+  }
+
+  function synonymHtml(hits) {
+    const arr = Array.isArray(hits) ? hits : [];
+    if (!arr.length) { return ''; }
+    const chips = arr.map(function (h) {
+      const q = str(h && h.query);
+      const m = str(h && h.matched);
+      const d = Number(h && h.discount);
+      const dLabel = Number.isFinite(d) ? ('同义词 ×' + d.toFixed(2)) : '同义词';
+      return '<span class="sf-syn-hit">' + escapeHtml(q) + ' → ' + escapeHtml(m)
+        + ' · ' + escapeHtml(dLabel) + '</span>';
+    }).join('');
+    return '<div class="sf-explain-group"><span class="sf-explain-group-label">同义词命中</span>'
+      + chips + '</div>';
+  }
+
+  function explainHtml(exp) {
+    if (!exp || typeof exp !== 'object') { return ''; }
+    const bars = signalBarsHtml(exp);
+    const kw = chipListHtml(exp.matched_keywords);
+    const tg = chipListHtml(exp.matched_tags);
+    const syn = synonymHtml(exp.synonym_hits);
+    const kwGroup = kw
+      ? '<div class="sf-explain-group"><span class="sf-explain-group-label">命中关键词</span>' + kw + '</div>'
+      : '';
+    const tgGroup = tg
+      ? '<div class="sf-explain-group"><span class="sf-explain-group-label">命中标签</span>' + tg + '</div>'
+      : '';
+    if (!bars && !kwGroup && !tgGroup && !syn) { return ''; }
+    return '<div class="sf-explain">' + bars + kwGroup + tgGroup + syn + '</div>';
+  }
+
+  function skillForMatch(item) {
+    const id = str(item && item.id);
+    if (!id) { return null; }
+    return state.skills.find(function (s) { return s.id === id; }) || null;
+  }
+
+  function shellArg(target) {
+    const t = str(target);
+    if (!t) { return '""'; }
+    return /\s/.test(t) ? ('"' + t + '"') : t;
+  }
+
+  function thresholdText() {
+    return DEFAULT_THRESHOLD.toFixed(SCORE_DIGITS);
+  }
+
+  function matchCardHtml(item, index, href) {
+    const reason = splitReason(item.reason);
+    const confHtml = confidenceBadgeHtml(reason.confidence);
+    const tieHtml = reason.tie
+      ? '<p class="sf-tie">存在并列候选：第一名与第二名得分非常接近，请结合实际任务人工判断。</p>'
+      : '';
+    const reasonHtml = reason.text
+      ? '<p class="sf-match-reason">' + escapeHtml(reason.text) + '</p>'
+      : '<p class="sf-match-reason">（无命中原因）</p>';
+
+    const pathHtml = item.path
+      ? '<code class="sf-path" title="' + escapeHtml(item.path) + '">' + escapeHtml(item.path) + '</code>'
+      : '<code class="sf-path sf-path--missing">（服务端未返回路径）</code>';
+
+    const skill = skillForMatch(item);
+    const target = str(skill && skill.slug) || str(item.name) || str(item.id);
+    const loadCmd = 'sfx load ' + shellArg(target);
+    const misfireCmd = loadCmd + ' --misfire';
+
+    const copyPathHtml = item.path
+      ? '<button class="sf-copy" type="button" data-copy-text="' + escapeHtml(item.path)
+        + '" aria-label="复制技能路径：' + escapeHtml(item.name) + '">复制路径</button>'
+      : '';
+    const actionsHtml = '<div class="sf-match-actions">'
+      + '<button class="sf-copy" type="button" data-copy-cmd="' + escapeHtml(loadCmd)
+        + '" aria-label="采纳这个技能：复制命令 ' + escapeHtml(loadCmd) + '">采纳这个技能</button>'
+      + '<button class="sf-copy" type="button" data-copy-cmd="' + escapeHtml(misfireCmd)
+        + '" aria-label="标记误推荐：复制命令 ' + escapeHtml(misfireCmd) + '">标记误推荐</button>'
+      + copyPathHtml
+      + '</div>';
+
+    const open = href
+      ? '<a class="sf-match" href="' + escapeHtml(href) + '">'
+      : '<div class="sf-match">';
+    const close = href ? '</a>' : '</div>';
+
+    return [
+      open,
+      '<div class="sf-match-head">',
+      '<h3 class="sf-match-name">' + escapeHtml(item.name) + '</h3>',
+      confHtml,
+      '<span class="sf-score" title="匹配得分">' + formatScore(item.score) + '</span>',
+      '</div>',
+      tieHtml,
+      reasonHtml,
+      explainHtml(item.explain),
+      '<div class="sf-match-path">' + pathHtml + '</div>',
+      actionsHtml,
+      close
+    ].join('');
+  }
+
+  function renderMatchSuccess(matched) {
+    const top = matched.reduce(function (best, item) {
+      const s = Number(item.score);
+      return (Number.isFinite(s) && s > best) ? s : best;
+    }, 0);
+    const note = '<p class="sf-threshold-note">当前阈值 ' + thresholdText()
+      + '，本次最高分 ' + formatScore(top) + '。命中 ' + matched.length
+      + ' 个技能，按得分从高到低。</p>';
+    const cards = matched.map(function (item, i) {
+      return matchCardHtml(item, i, skillHrefForName(item.name));
+    }).join('');
+    dom.result.innerHTML = note + '<div class="sf-match-list">' + cards + '</div>';
+  }
+
+  function renderMatchEmpty() {
+    const task = state.lastTask || '你的任务';
+    const lowerCmd = 'sfx match "' + task + '" --min-score 0.1';
+    renderMatchState(
+      'empty',
+      '没有技能达到匹配阈值',
+      '当前任务没有命中任何技能。常见原因：技能库还没扫描、任务描述与技能触发词差异太大，或阈值偏高。',
+      '',
+      '<div class="sf-match-empty-actions">'
+        + '<button class="sf-btn sf-btn--ghost" type="button" data-copy-cmd="' + escapeHtml(lowerCmd)
+          + '" aria-label="复制降低阈值命令">降低阈值</button>'
+        + '<button class="sf-btn sf-btn--ghost" type="button" data-copy-cmd="sfx scan"'
+          + ' aria-label="复制重新扫描命令">补充触发词后扫描</button>'
+        + '<a class="sf-btn sf-btn--ghost" href="#/library">查看全部技能</a>'
+        + '</div>'
+    );
+  }
+
+  function renderMatchFailure(error) {
+    const kind = (error && error.kind) ? error.kind : 'unknown';
+    const message = str(error && error.message) || '未知错误';
+
+    if (kind === 'timeout') {
+      renderMatchState(
+        'error',
+        '匹配超时',
+        escapeHtml(message),
+        '本机服务可能正在扫描或数据库被占用。稍等片刻后重试。'
+      );
+      return;
+    }
+
+    if (kind === 'network') {
+      renderMatchState(
+        'error',
+        '无法连接本地服务',
+        escapeHtml(message),
+        '请确认终端里的 ' + codeTag('sfx serve') + ' 仍在运行，然后重试。'
+      );
+      return;
+    }
+
+    renderMatchState(
+      'error',
+      '匹配失败',
+      escapeHtml(message),
+      '空任务会返回「缺少 task」。其余错误请查看运行 ' + codeTag('sfx serve') + ' 的终端输出。'
+    );
+  }
+
+  /* ========================================================================
+     交互：提交匹配
+     ======================================================================== */
+  function setSubmitBusy(busy) {
+    dom.submit.disabled = busy;
+    dom.submit.setAttribute('aria-busy', busy ? 'true' : 'false');
+    dom.submit.innerHTML = busy
+      ? '<span class="sf-spinner" aria-hidden="true"></span><span>' + SPINNER_LABEL + '</span>'
+      : SUBMIT_LABEL;
+  }
+
+  async function submitMatch() {
+    if (state.matchBusy) { return; }
+    const task = str(dom.task.value);
+    if (!task) {
+      renderMatchState(
+        'error',
+        '请先输入任务描述',
+        '任务描述不能为空。',
+        '例如：' + codeTag('帮我写一个 Spring Boot 的分页接口') + '。'
+      );
+      dom.task.focus();
+      return;
+    }
+
+    rememberLabTask(task);
+    state.lastTask = task;
+    state.matchBusy = true;
+    setSubmitBusy(true);
+    renderMatchLoading();
+
+    try {
+      const result = await dataSource.match(task);
+      const matched = (result && Array.isArray(result.matched))
+        ? result.matched
+        : (Array.isArray(result) ? result : []);
+      state.matches = matched;
+      if (matched.length === 0) {
+        renderMatchEmpty();
+      } else {
+        renderMatchSuccess(matched);
+      }
+    } catch (error) {
+      state.matches = [];
+      renderMatchFailure(error);
+    } finally {
+      state.matchBusy = false;
+      setSubmitBusy(false);
+    }
+  }
+
+  function rememberLabTask(task) {
+    try {
+      const list = readLS(LS.labHistory, []);
+      const next = [task].concat(list.filter(function (t) { return t !== task; })).slice(0, 8);
+      writeLS(LS.labHistory, next);
+    } catch (e) { /* 非关键 */ }
+  }
+
+  function getLabHistory() {
+    const list = readLS(LS.labHistory, []);
+    return Array.isArray(list) ? list : [];
+  }
+
+  /* ========================================================================
+     交互：复制路径（事件委托，避免内联 onclick）
+     ======================================================================== */
+  async function onCopyClick(event) {
+    const target = event.target;
+    if (!(target instanceof Element)) { return; }
+    // 采纳 / 误推荐：复制命令并 toast 提示去终端执行
+    const cmdButton = target.closest('[data-copy-cmd]');
+    if (cmdButton instanceof HTMLButtonElement) {
+      event.preventDefault();
+      const text = cmdButton.getAttribute('data-copy-cmd');
+      const ok = await copyText(text);
+      showToast(ok ? ('已复制命令，请在终端执行：' + text) : '复制失败，请手动复制', ok ? 'ok' : 'fail');
+      return;
+    }
+    const button = target.closest('[data-copy-text]');
+    if (!(button instanceof HTMLButtonElement)) { return; }
+    event.preventDefault();
+    const text = button.getAttribute('data-copy-text');
+    const succeeded = await copyText(text);
+    flashCopyFeedback(button, succeeded);
+  }
+
+  /* ========================================================================
+     交互：重新加载（显式触发，首屏不请求）
+     ======================================================================== */
+  async function reloadSkills() {
+    if (state.refreshBusy) { return; }
+    state.refreshBusy = true;
+    if (dom.refresh) { dom.refresh.disabled = true; }
+    showGridState(
+      'loading',
+      '<span class="sf-spinner" aria-hidden="true"></span><span>正在从本机服务重新读取技能列表…</span>'
+    );
+
+    try {
+      await dataSource.reloadSkills();
+      // 技能换了，采纳数据也要重取；loadScores 完成后会自己重排重渲染（含 facet 计数）
+      await loadScores();
+      showToast('已从本机服务重新读取', 'ok');
+      clearStatus('serve-down');
+    } catch (error) {
+      const message = str(error && error.message) || '未知错误';
+      showGridState('error', [
+        '<p class="sf-state-title">重新加载失败</p>',
+        '<p class="sf-state-body">' + escapeHtml(message) + '</p>',
+        '<p class="sf-state-hint">页面仍显示刚才内联的 ' + state.skills.length
+          + ' 个技能，可继续浏览。确认 ' + codeTag('sfx serve') + ' 正常后再试。</p>'
+      ].join(''));
+      if (state.skills.length > 0) {
+        dom.grid.hidden = false;
+        dom.grid.innerHTML = state.filtered.map(skillCardHtml).join('');
+      }
+      if (error && error.kind === 'network') {
+        setStatus('serve-down', 3,
+          '<p class="sf-state-title">本地服务失联</p><p class="sf-state-body">'
+          + escapeHtml(message) + '，技能库与匹配暂不可用。</p>',
+          { label: '重试连接', run: function () { reloadSkills(); } });
+      }
+    } finally {
+      state.refreshBusy = false;
+      if (dom.refresh) { dom.refresh.disabled = false; }
+    }
+  }
+
+  /* ========================================================================
+     路由
+     ======================================================================== */
+  const ROUTES = [
+    { name: 'overview', pattern: /^#\/overview$/, title: '概览' },
+    { name: 'library', pattern: /^#\/library(\?[^#]*)?$/, title: '技能库' },
+    { name: 'libraryDetail', pattern: /^#\/library\/(.+)$/, title: '技能详情' },
+    { name: 'lab', pattern: /^#\/lab$/, title: '路由试验台' },
+    { name: 'workbench', pattern: /^#\/workbench$/, title: '工作台' },
+    { name: 'workbenchDetail', pattern: /^#\/workbench\/(.+)$/, title: '工作台' },
+    { name: 'market', pattern: /^#\/market$/, title: '团队市场' },
+    { name: 'settings', pattern: /^#\/settings$/, title: '设置' }
+  ];
+
+  function parseRoute() {
+    const hash = location.hash || '#/overview';
+    for (let i = 0; i < ROUTES.length; i++) {
+      const r = ROUTES[i];
+      const m = r.pattern.exec(hash);
+      if (m) {
+        return {
+          name: r.name,
+          title: r.title,
+          param: m[1] ? decodeURIComponent(m[1]) : null
+        };
+      }
+    }
+    return { name: 'overview', title: '概览', param: null, fallback: true };
+  }
+
+  function updateNav(name) {
+    $$('.sf-nav-link', dom.navList).forEach(function (a) {
+      const route = a.getAttribute('data-route');
+      const on = route === name
+        || (name === 'libraryDetail' && route === 'library')
+        || (name === 'workbenchDetail' && route === 'workbench');
+      a.classList.toggle('is-current', on);
+      if (on) { a.setAttribute('aria-current', 'page'); }
+      else { a.removeAttribute('aria-current'); }
+    });
+  }
+
+  function setTopbarTitle(title) {
+    dom.pageTitle.textContent = title || '';
+  }
+
+  function setTopbarAction(action) {
+    dom.topbarAction.innerHTML = '';
+    if (!action) { return; }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sf-btn sf-btn--ghost';
+    btn.textContent = action.label;
+    btn.addEventListener('click', action.onClick);
+    dom.topbarAction.appendChild(btn);
+  }
+
+  function announce(message) {
+    dom.routeLive.textContent = message;
+  }
+
+  function render() {
+    const route = parseRoute();
+    if (route.fallback) {
+      location.replace('#/overview');
+      return;
+    }
+    const page = (typeof pages[route.name] === 'function')
+      ? pages[route.name](route.param)
+      : pages.overview(null);
+
+    dom.main.innerHTML = page.html;
+    document.title = 'SkillForge · ' + (page.title || '');
+    setTopbarTitle(page.title || '');
+    setTopbarAction(page.action || null);
+    updateNav(route.name);
+
+    if (typeof page.mount === 'function') {
+      page.mount(route.param);
+    }
+
+    // 焦点落到 #sf-main，保证键盘与读屏定位
+    dom.main.focus();
+    announce('已进入' + (page.title || '页面'));
+  }
+
+  /* ========================================================================
+     自报条（全局系统状态）
+     优先级：error(3) > warn(2) > info(1)；相同 key 本次会话关闭后不再自动弹出
+     ======================================================================== */
+  function loadDismiss() {
+    return readLS(LS.dismiss, {});
+  }
+
+  function setStatus(key, priority, html, action) {
+    statusState.items[key] = { priority: priority, html: html, action: action || null };
+    renderStatus();
+  }
+
+  function clearStatus(key) {
+    delete statusState.items[key];
+    renderStatus();
+  }
+
+  function dismissStatus(key) {
+    statusState.dismiss[key] = Date.now();
+    try { localStorage.setItem(LS.dismiss, JSON.stringify(statusState.dismiss)); } catch (e) { /* ignore */ }
+    delete statusState.items[key];
+    renderStatus();
+  }
+
+  function renderStatus() {
+    const active = Object.keys(statusState.items)
+      .filter(function (k) { return !statusState.dismiss[k]; })
+      .map(function (k) { return Object.assign({ key: k }, statusState.items[k]); })
+      .sort(function (a, b) { return b.priority - a.priority; });
+
+    if (active.length === 0) {
+      dom.statusbar.hidden = true;
+      dom.statusbar.innerHTML = '';
+      return;
+    }
+
+    const top = active[0];
+    const cls = top.priority >= 3 ? 'sf-state--error' : (top.priority === 2 ? 'sf-state--empty' : 'sf-state--info');
+    const actionHtml = top.action
+      ? '<button class="sf-btn sf-btn--ghost" type="button" data-status-action="1">'
+        + escapeHtml(top.action.label) + '</button>'
+      : '';
+    const closeHtml = '<button class="sf-btn sf-btn--ghost" type="button" data-status-close="1" aria-label="关闭提示">关闭</button>';
+    const actions = (actionHtml || closeHtml)
+      ? '<div class="sf-status-actions">' + actionHtml + closeHtml + '</div>'
+      : '';
+
+    dom.statusbar.hidden = false;
+    dom.statusbar.className = 'sf-statusbar';
+    dom.statusbar.innerHTML = '<div class="sf-state ' + cls + '">' + top.html + actions + '</div>';
+  }
+
+  function bindStatusbar() {
+    dom.statusbar.addEventListener('click', function (event) {
+      const target = event.target;
+      if (!(target instanceof Element)) { return; }
+      const closeBtn = target.closest('[data-status-close]');
+      if (closeBtn) {
+        const key = Object.keys(statusState.items)[0];
+        const visible = Object.keys(statusState.items).filter(function (k) { return !statusState.dismiss[k]; });
+        if (visible.length) { dismissStatus(visible[0]); }
+        return;
+      }
+      const actionBtn = target.closest('[data-status-action]');
+      if (actionBtn) {
+        const visible = Object.keys(statusState.items).filter(function (k) { return !statusState.dismiss[k]; });
+        if (visible.length) {
+          const item = statusState.items[visible[0]];
+          if (item && item.action && typeof item.action.run === 'function') { item.action.run(); }
+        }
+      }
+    });
+  }
+
+  /* ========================================================================
+     主题（深/浅/跟随）
+     ======================================================================== */
+  function applyTheme() {
+    const t = (function () {
+      try { return localStorage.getItem(LS.theme); } catch (e) { return null; }
+    })();
+    if (t === 'dark' || t === 'light') {
+      document.documentElement.setAttribute('data-theme', t);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }
+
+  /* ========================================================================
+     各页：概览
+     ======================================================================== */
+  function quickCard(href, ico, title, desc) {
+    return [
+      '<a class="sf-card sf-quick" href="' + href + '">',
+      '<span class="sf-quick-ico" aria-hidden="true">' + ico + '</span>',
+      '<h3 class="sf-card-name">' + escapeHtml(title) + '</h3>',
+      '<p class="sf-quick-desc">' + escapeHtml(desc) + '</p>',
+      '</a>'
+    ].join('');
+  }
+
+  function activityItemHtml(skill) {
+    const meta = ['v' + skill.version];
+    if (skill.author) { meta.push(skill.author); }
+    return [
+      '<li><a class="sf-activity-item" href="#/library/',
+      encodeURIComponent(skill.slug || skill.id), '">',
+      '<span class="sf-activity-dot" aria-hidden="true"></span>',
+      '<span class="sf-activity-name">' + escapeHtml(skill.name) + '</span>',
+      '<span class="sf-activity-meta">' + escapeHtml(meta.join(' · ')) + '</span>',
+      '</a></li>'
+    ].join('');
+  }
+
+  function mockScan() {
+    showToast('已触发扫描（mock）', 'ok');
+    clearStatus('never-scanned');
+    setStatus('scanned', 1,
+      '<p class="sf-state-title">扫描已触发</p><p class="sf-state-body">这是前端 mock，真实扫描请在终端运行 '
+      + 'sfx scan。</p>', null);
+    window.setTimeout(function () { clearStatus('scanned'); }, TOAST_MS + 400);
+  }
+
+  const pages = {};
+
+  pages.overview = function () {
+    const recent = dataSource.recent(LIB_COUNT);
+    const recentHtml = recent.length
+      ? '<ul class="sf-activity">' + recent.map(activityItemHtml).join('') + '</ul>'
+      : '<div class="sf-state sf-state--empty"><p class="sf-state-title">还没有技能</p>'
+        + '<p class="sf-state-body">运行 ' + codeTag('sfx scan') + ' 后这里会显示最近入库的技能。</p></div>';
+
+    const html = [
+      '<section aria-labelledby="ov-stats-title">',
+      '<h2 class="sf-sr-only" id="ov-stats-title">技能库概览</h2>',
+      '<div class="sf-stats">',
+      '<article class="sf-stat"><p class="sf-stat-num" data-stat="total">–</p><p class="sf-stat-label">入库总数</p></article>',
+      '<article class="sf-stat"><p class="sf-stat-num sf-stat-num--accent" data-stat="active">–</p><p class="sf-stat-label">已启用</p></article>',
+      '<article class="sf-stat sf-stat--time" data-stat="last-card"><p class="sf-stat-num" data-stat="last">–</p>',
+      '<p class="sf-stat-label">最近扫描</p>',
+      '<p class="sf-stat-note" data-stat="last-note" hidden>运行 ' + codeTag('sfx scan') + ' 采集技能</p></article>',
+      '</div>',
+      '</section>',
+
+      '<section class="sf-panel" aria-labelledby="ov-quick-title">',
+      '<div class="sf-panel-head"><h2 class="sf-panel-title" id="ov-quick-title">快捷入口</h2></div>',
+      '<div class="sf-grid">',
+      quickCard('#/library', '▤', '技能库', '浏览、筛选、搜索全部技能'),
+      quickCard('#/lab', '⇄', '路由试验台', '看 SkillForge 如何为任务挑技能'),
+      quickCard('#/workbench', '✎', '工作台', '编写与管理 Prompt 草稿'),
+      quickCard('#/market', '⧉', '团队市场', '发现并安装团队共享技能'),
+      '</div>',
+      '</section>',
+
+      '<section class="sf-panel" aria-labelledby="ov-recent-title">',
+      '<div class="sf-panel-head"><h2 class="sf-panel-title" id="ov-recent-title">最近活动</h2>',
+      '<span class="sf-panel-note">最近入库 ' + recent.length + ' 个</span></div>',
+      recentHtml,
+      '</section>',
+
+      '<section class="sf-panel" aria-labelledby="ov-lab-title">',
+      '<div class="sf-panel-head"><h2 class="sf-panel-title" id="ov-lab-title">路由试验台</h2>',
+      '<a class="sf-btn sf-btn--ghost" href="#/lab">打开完整版</a></div>',
+      '<p class="sf-hint">在完整版里输入任务，看 SkillForge 会把哪个技能交给 Metis，并给出命中原因与得分。</p>',
+      '</section>'
+    ].join('');
+
+    return {
+      title: '概览',
+      html: html,
+      mount: function () {
+        renderStatsInto(dom.main, STATS);
+        const scannedAt = formatTimestamp(STATS && STATS.last_scanned_at);
+        if (!scannedAt) {
+          setStatus('never-scanned', 2,
+            '<p class="sf-state-title">还没有扫描过技能</p><p class="sf-state-body">运行 '
+            + codeTag('sfx scan') + ' 采集本机技能，概览与技能库才会显示数据。</p>',
+            { label: '去扫描', run: mockScan });
+        }
+      }
+    };
+  };
+
+  /* ========================================================================
+     各页：技能库（分类 facet + 工具条 + 网格）
+     ======================================================================== */
+  const libFacet = { authors: new Set(), tags: new Set(), domains: new Set(), query: '', scoreBand: null };
+  let libSortFields = [{ key: 'recent', dir: 1 }];
+  let suggestEl = null;
+  let suggestItems = [];
+  let activeSuggest = -1;
+
+  const SORT_KEYS = ['recent', 'score', 'name', 'version', 'author'];
+  const SORT_LABEL = {
+    recent: '最近 / 相关度', score: '采纳率', name: '名称', version: '版本', author: '作者'
+  };
+  const DEFAULT_SORT_FIELDS = [{ key: 'recent', dir: 1 }];
+  const SCORE_BAND_LABEL = { data: '有采纳率', insufficient: '数据不足' };
+
+  // v2：旧 key 里存的是按假分为基础的视图（含"高命中率"），换 key 避免把假筛选带过来
+  const LIB_VIEWS_LS = 'sf:lib-views:v2';
+  const LIB_VIEW_PRESETS = [
+    { name: '采纳率优先', facets: {}, query: '', sortFields: [{ key: 'score', dir: -1 }], scoreBand: null },
+    { name: '名称排序', facets: {}, query: '', sortFields: [{ key: 'name', dir: 1 }], scoreBand: null }
+  ];
+
+  /* 采纳率两态实时计数：每个维度统计「通过除该维度外所有筛选」的技能数 */
+  function activeScoreBand() {
+    const band = libFacet.scoreBand;
+    // 旧版本存下来的 high/mid/low 是按哈希假分算的，直接作废，不做映射
+    return (band === 'data' || band === 'insufficient') ? band : null;
+  }
+
+  function passesExcept(skill, exceptDim) {
+    if (exceptDim !== 'authors' && libFacet.authors.size
+      && !libFacet.authors.has(skill.author)) { return false; }
+    if (exceptDim !== 'tags' && libFacet.tags.size
+      && !skill.tags.some(function (t) { return libFacet.tags.has(t); })) { return false; }
+    if (exceptDim !== 'domains' && libFacet.domains.size
+      && !skill.tags.some(function (t) { return libFacet.domains.has(tagDomain(t)); })) { return false; }
+    const band = activeScoreBand();
+    if (exceptDim !== 'score' && band
+      && scoreTier(scoreInfo(skill)) !== band) { return false; }
+    if (libFacet.query && !matchTerm(skill, libFacet.query)) { return false; }
+    return true;
+  }
+
+  function computeFacets() {
+    const authors = {};
+    const tags = {};
+    const domains = {};
+    const scores = { data: 0, insufficient: 0 };
+    state.skills.forEach(function (s) {
+      if (passesExcept(s, 'authors') && s.author) { authors[s.author] = (authors[s.author] || 0) + 1; }
+      if (passesExcept(s, 'tags')) {
+        s.tags.forEach(function (t) { tags[t] = (tags[t] || 0) + 1; });
+      }
+      if (passesExcept(s, 'domains')) {
+        s.tags.forEach(function (t) { const d = tagDomain(t); domains[d] = (domains[d] || 0) + 1; });
+      }
+      if (passesExcept(s, 'score')) {
+        const tier = scoreTier(scoreInfo(s));
+        scores[tier] = (scores[tier] || 0) + 1;
+      }
+    });
+    return {
+      authors: Object.keys(authors).sort(function (a, b) { return a.localeCompare(b, 'zh'); }).map(function (k) { return { k: k, n: authors[k] }; }),
+      tags: Object.keys(tags).sort(function (a, b) { return a.localeCompare(b, 'zh'); }).map(function (k) { return { k: k, n: tags[k] }; }),
+      domains: ['Scan', 'Match', 'Prompt', 'Track', 'Deploy', 'Other'].filter(function (d) { return domains[d]; }).map(function (k) { return { k: k, n: domains[k] }; }),
+      scores: scores
+    };
+  }
+
+  function facetOptHtml(type, value, count) {
+    let checked = false;
+    if (type === 'author') { checked = libFacet.authors.has(value); }
+    else if (type === 'tag') { checked = libFacet.tags.has(value); }
+    else if (type === 'domain') { checked = libFacet.domains.has(value); }
+    else if (type === 'score') { checked = libFacet.scoreBand === value; }
+    const label = type === 'score' ? (SCORE_BAND_LABEL[value] || value) : value;
+    return '<label class="sf-facet-opt"><input type="checkbox" data-facet="' + type
+      + '" value="' + escapeHtml(value) + '"' + (checked ? ' checked' : '') + '>'
+      + '<span>' + escapeHtml(label) + '</span>'
+      + '<span class="sf-facet-count">' + count + '</span></label>';
+  }
+
+  function facetPanelHtml() {
+    const f = computeFacets();
+    const hasFacets = f.authors.length || f.tags.length || f.domains.length
+      || f.scores.data || f.scores.insufficient;
+    const scoreGroup = '<div class="sf-facet-group"><span class="sf-facet-legend">按采纳率</span>'
+      + ['data', 'insufficient'].map(function (b) { return facetOptHtml('score', b, f.scores[b] || 0); }).join('') + '</div>';
+    return [
+      '<aside class="sf-facets" aria-label="分类筛选">',
+      '<button class="sf-btn sf-btn--ghost sf-facet-all" type="button" id="sf-facet-all">全部</button>',
+      hasFacets ? '' : '<p class="sf-hint">暂无可用分类，先 ' + codeTag('sfx scan') + '。</p>',
+      f.domains.length ? '<div class="sf-facet-group"><span class="sf-facet-legend">按功能域</span>'
+        + f.domains.map(function (d) { return facetOptHtml('domain', d.k, d.n); }).join('') + '</div>' : '',
+      f.authors.length ? '<div class="sf-facet-group"><span class="sf-facet-legend">按作者</span>'
+        + f.authors.map(function (a) { return facetOptHtml('author', a.k, a.n); }).join('') + '</div>' : '',
+      f.tags.length ? '<div class="sf-facet-group"><span class="sf-facet-legend">按标签（多选）</span>'
+        + f.tags.map(function (t) { return facetOptHtml('tag', t.k, t.n); }).join('') + '</div>' : '',
+      scoreGroup,
+      '</aside>'
+    ].join('');
+  }
+
+  function libMatches(skill) {
+    return passesExcept(skill, '');
+  }
+
+  function cmpVersion(a, b) {
+    const pa = String(a).split('.').map(Number);
+    const pb = String(b).split('.').map(Number);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const x = pa[i] || 0;
+      const y = pb[i] || 0;
+      if (x !== y) { return x - y; }
+    }
+    return 0;
+  }
+
+  /* 多字段稳定排序：按 fields 顺序比较，采纳率默认降序，其余默认升序。
+     score 字段的「有数据 / 数据不足」分组不受升降序影响：有真实采纳率的永远在前，
+     数据不足的按原始顺序稳定排在后面（Array#sort 稳定 → cmp 归零即保持原序）。 */
+  function scoreSortValue(skill) {
+    const info = scoreInfo(skill);
+    return info.kind === 'rate' ? info.rate : null;
+  }
+
+  function sortSkills(list, fields) {
+    const arr = list.slice();
+    arr.sort(function (a, b) {
+      for (let i = 0; i < fields.length; i++) {
+        const f = fields[i];
+        let cmp = 0;
+        if (f.key === 'score') {
+          const ra = scoreSortValue(a);
+          const rb = scoreSortValue(b);
+          if ((ra === null) !== (rb === null)) { return ra === null ? 1 : -1; }
+          cmp = (ra === null || rb === null) ? 0 : (ra - rb);
+        }
+        else if (f.key === 'name') { cmp = a.name.localeCompare(b.name, 'zh'); }
+        else if (f.key === 'version') { cmp = cmpVersion(a.version, b.version); }
+        else if (f.key === 'author') { cmp = a.author.localeCompare(b.author, 'zh'); }
+        else if (f.key === 'recent') { cmp = (a._order - b._order); }
+        if (cmp !== 0) { return cmp * f.dir; }
+      }
+      return 0;
+    });
+    return arr;
+  }
+
+  function applyLibraryFilter() {
+    state.query = libFacet.query;
+    let list = state.skills.filter(libMatches);
+    list = sortSkills(list, libSortFields);
+    state.filtered = list;
+    renderSkillList();
+    updateFacetCounts();
+  }
+
+  /* 重新渲染 facet 面板并把计数收敛到当前其它筛选；同时重新绑定复选框 */
+  function updateFacetCounts() {
+    const aside = $('aside.sf-facets', dom.main);
+    if (!aside) { return; }
+    aside.outerHTML = facetPanelHtml();
+    bindFacetPanel();
+  }
+
+  function bindFacetPanel() {
+    const all = $('#sf-facet-all', dom.main);
+    if (all) {
+      all.addEventListener('click', function () { resetFacets(); applyLibraryFilter(); });
+    }
+    $$('input[data-facet]', dom.main).forEach(function (box) {
+      box.addEventListener('change', onFacetChange);
+    });
+  }
+
+  function onFacetChange() {
+    const box = this;
+    const type = box.getAttribute('data-facet');
+    const val = box.value;
+    if (type === 'score') {
+      if (box.checked) {
+        $$('input[data-facet="score"]', dom.main).forEach(function (o) { if (o !== box) { o.checked = false; } });
+        libFacet.scoreBand = val;
+      } else {
+        libFacet.scoreBand = null;
+      }
+      applyLibraryFilter();
+      return;
+    }
+    const set = type === 'author' ? libFacet.authors : type === 'tag' ? libFacet.tags : libFacet.domains;
+    if (box.checked) { set.add(val); } else { set.delete(val); }
+    applyLibraryFilter();
+  }
+
+  function resetFacets() {
+    libFacet.authors.clear();
+    libFacet.tags.clear();
+    libFacet.domains.clear();
+    libFacet.scoreBand = null;
+    libFacet.query = '';
+    if (dom.filter) { dom.filter.value = ''; }
+    $$('input[data-facet]', dom.main).forEach(function (c) { c.checked = false; });
+  }
+
+  /* ========================================================================
+     排序浮层 / 视图菜单 / 搜索建议（v2.0 新增）
+     ======================================================================== */
+  function sortFieldLabel(key) { return SORT_LABEL[key] || key; }
+
+  function renderSortPanel() {
+    const panel = $('#sf-lib-sort-panel', dom.main);
+    if (!panel) { return; }
+    const rows = libSortFields.map(function (field, i) {
+      const dirLabel = field.dir === 1 ? '升序' : '降序';
+      const upDisabled = i === 0 ? ' disabled' : '';
+      const downDisabled = i === libSortFields.length - 1 ? ' disabled' : '';
+      return '<div class="sf-sort-row" data-idx="' + i + '">'
+        + '<button type="button" class="sf-btn sf-btn--ghost sf-sort-move" data-act="up"' + upDisabled + ' aria-label="上移排序优先级">▲</button>'
+        + '<button type="button" class="sf-btn sf-btn--ghost sf-sort-move" data-act="down"' + downDisabled + ' aria-label="下移排序优先级">▼</button>'
+        + '<span class="sf-sort-label">' + escapeHtml(sortFieldLabel(field.key)) + '</span>'
+        + '<button type="button" class="sf-btn sf-btn--ghost sf-sort-dir" data-act="dir" aria-label="切换升序或降序">' + dirLabel + '</button>'
+        + '</div>';
+    }).join('');
+    const addOpts = SORT_KEYS.map(function (k) {
+      return '<option value="' + k + '">' + escapeHtml(sortFieldLabel(k)) + '</option>';
+    }).join('');
+    panel.innerHTML = rows
+      + '<div class="sf-sort-add"><select class="sf-select" id="sf-sort-add">' + addOpts + '</select>'
+      + '<button type="button" class="sf-btn sf-btn--ghost" id="sf-sort-add-btn">添加</button></div>'
+      + '<button type="button" class="sf-btn sf-btn--ghost" id="sf-sort-reset">重置为默认</button>';
+
+    $$('.sf-sort-row', panel).forEach(function (row) {
+      const idx = Number(row.getAttribute('data-idx'));
+      row.addEventListener('click', function (e) {
+        const act = e.target.getAttribute ? e.target.getAttribute('data-act') : null;
+        if (!act) { return; }
+        if (act === 'up' && idx > 0) {
+          const tmp = libSortFields[idx - 1]; libSortFields[idx - 1] = libSortFields[idx]; libSortFields[idx] = tmp;
+        } else if (act === 'down' && idx < libSortFields.length - 1) {
+          const tmp = libSortFields[idx + 1]; libSortFields[idx + 1] = libSortFields[idx]; libSortFields[idx] = tmp;
+        } else if (act === 'dir') {
+          libSortFields[idx].dir = libSortFields[idx].dir === 1 ? -1 : 1;
+        } else { return; }
+        renderSortPanel();
+        applyLibraryFilter();
+      });
+    });
+    const addSel = $('#sf-sort-add', panel);
+    const addBtn = $('#sf-sort-add-btn', panel);
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        const key = addSel ? addSel.value : null;
+        if (!key) { return; }
+        const dir = key === 'score' ? -1 : 1;
+        libSortFields.push({ key: key, dir: dir });
+        renderSortPanel();
+        applyLibraryFilter();
+      });
+    }
+    const resetBtn = $('#sf-sort-reset', panel);
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        libSortFields = DEFAULT_SORT_FIELDS.slice();
+        renderSortPanel();
+        applyLibraryFilter();
+      });
+    }
+  }
+
+  function loadViews() {
+    const saved = readLS(LIB_VIEWS_LS, null);
+    if (Array.isArray(saved)) { return saved; }
+    writeLS(LIB_VIEWS_LS, LIB_VIEW_PRESETS);
+    return LIB_VIEW_PRESETS.slice();
+  }
+
+  function saveViews(arr) { return writeLS(LIB_VIEWS_LS, arr); }
+
+  function applyView(view) {
+    if (!view) { return; }
+    libFacet.authors.clear();
+    libFacet.tags.clear();
+    libFacet.domains.clear();
+    libFacet.scoreBand = view.scoreBand || null;
+    libFacet.query = view.query || '';
+    const facets = view.facets || {};
+    (facets.authors || []).forEach(function (a) { libFacet.authors.add(a); });
+    (facets.tags || []).forEach(function (t) { libFacet.tags.add(t); });
+    (facets.domains || []).forEach(function (d) { libFacet.domains.add(d); });
+    libSortFields = (Array.isArray(view.sortFields) && view.sortFields.length)
+      ? view.sortFields.map(function (f) { return { key: f.key, dir: f.dir === -1 ? -1 : 1 }; })
+      : DEFAULT_SORT_FIELDS.slice();
+    if (dom.filter) { dom.filter.value = libFacet.query; }
+    applyLibraryFilter();
+  }
+
+  function saveCurrentView() {
+    const name = window.prompt('为当前视图命名：');
+    if (!name) { return; }
+    const views = loadViews();
+    views.push({
+      name: name,
+      facets: {
+        authors: Array.from(libFacet.authors),
+        tags: Array.from(libFacet.tags),
+        domains: Array.from(libFacet.domains)
+      },
+      query: libFacet.query || '',
+      sortFields: libSortFields.map(function (f) { return { key: f.key, dir: f.dir }; }),
+      scoreBand: libFacet.scoreBand || null
+    });
+    saveViews(views);
+    renderViewsMenu();
+    showToast('已保存视图：' + name, 'ok');
+  }
+
+  function renderViewsMenu() {
+    const menu = $('#sf-lib-views', dom.main);
+    if (!menu) { return; }
+    const views = loadViews();
+    if (!views.length) {
+      menu.innerHTML = '<p class="sf-view-empty">（暂无保存的视图）</p>';
+      return;
+    }
+    menu.innerHTML = views.map(function (v, i) {
+      return '<button type="button" class="sf-view-item" data-view="' + i + '">'
+        + '<span class="sf-view-name">' + escapeHtml(v.name) + '</span>'
+        + '<span class="sf-view-del" data-del="' + i + '" aria-label="删除视图 ' + escapeHtml(v.name) + '" title="删除">×</span>'
+        + '</button>';
+    }).join('')
+      + '<button type="button" class="sf-btn sf-btn--ghost sf-view-save" id="sf-view-save">保存当前视图…</button>';
+
+    $$('.sf-view-item', menu).forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        const delAttr = e.target.getAttribute ? e.target.getAttribute('data-del') : null;
+        if (delAttr !== null) {
+          const di = Number(delAttr);
+          const vs = loadViews();
+          vs.splice(di, 1);
+          saveViews(vs);
+          renderViewsMenu();
+          return;
+        }
+        const vi = Number(btn.getAttribute('data-view'));
+        const v = loadViews()[vi];
+        if (v) { applyView(v); closeLibraryPopovers(); }
+      });
+    });
+    const saveBtn = $('#sf-view-save', menu);
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function () { saveCurrentView(); closeLibraryPopovers(); });
+    }
+  }
+
+  function closeLibraryPopovers() {
+    const sb = $('#sf-lib-sort-btn', dom.main);
+    const sp = $('#sf-lib-sort-panel', dom.main);
+    const vb = $('#sf-lib-views-btn', dom.main);
+    const vm = $('#sf-lib-views', dom.main);
+    if (sb) { sb.setAttribute('aria-expanded', 'false'); }
+    if (sp) { sp.hidden = true; }
+    if (vb) { vb.setAttribute('aria-expanded', 'false'); }
+    if (vm) { vm.hidden = true; }
+  }
+
+  function computeSuggest(q) {
+    if (!q) { return []; }
+    const out = [];
+    const seen = {};
+    state.skills.forEach(function (s) {
+      if (matchTerm(s, q) && !seen['name:' + s.name]) {
+        seen['name:' + s.name] = true;
+        out.push({ text: s.name, type: 'name' });
+      }
+      s.tags.forEach(function (t) {
+        const tl = t.toLowerCase();
+        if ((tl.indexOf(q) !== -1 || pinyinOf(t).indexOf(q) !== -1) && !seen['tag:' + t]) {
+          seen['tag:' + t] = true;
+          out.push({ text: t, type: 'tag' });
+        }
+      });
+    });
+    return out.slice(0, 8);
+  }
+
+  function renderSuggest(items) {
+    suggestItems = items;
+    activeSuggest = -1;
+    if (!suggestEl) { return; }
+    if (!items.length) { hideSuggest(); return; }
+    suggestEl.innerHTML = items.map(function (it, i) {
+      return '<button type="button" class="sf-suggest-item" data-i="' + i + '">'
+        + escapeHtml(it.text)
+        + ' <span class="sf-hint">' + (it.type === 'name' ? '技能' : '标签') + '</span></button>';
+    }).join('');
+    suggestEl.hidden = false;
+    $$('.sf-suggest-item', suggestEl).forEach(function (btn) {
+      btn.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        const i = Number(btn.getAttribute('data-i'));
+        pickSuggest(items[i]);
+      });
+    });
+  }
+
+  function moveSuggest(dir) {
+    if (!suggestItems.length || !suggestEl) { return; }
+    activeSuggest = (activeSuggest + dir + suggestItems.length) % suggestItems.length;
+    const nodes = $$('.sf-suggest-item', suggestEl);
+    nodes.forEach(function (n, i) { n.classList.toggle('is-active', i === activeSuggest); });
+    const active = nodes[activeSuggest];
+    if (active && active.scrollIntoView) { active.scrollIntoView({ block: 'nearest' }); }
+  }
+
+  function pickSuggest(item) {
+    if (!item || !dom.filter) { return; }
+    dom.filter.value = item.text;
+    libFacet.query = str(item.text).toLowerCase();
+    hideSuggest();
+    applyLibraryFilter();
+    dom.filter.focus();
+  }
+
+  function hideSuggest() {
+    if (suggestEl) { suggestEl.hidden = true; }
+    activeSuggest = -1;
+    suggestItems = [];
+  }
+
+  function computeAndShowSuggest(q) {
+    if (!q) { hideSuggest(); return; }
+    renderSuggest(computeSuggest(q));
+  }
+
+  function applyViewFromHash() {
+    const hash = location.hash || '';
+    const m = /[?&]view=([^&]+)/.exec(hash);
+    if (!m) { return; }
+    const name = decodeURIComponent(m[1]);
+    const v = loadViews().find(function (x) { return x.name === name; });
+    if (v) { applyView(v); showToast('已套用视图：' + name, 'ok'); }
+  }
+
+  pages.library = function () {
+    dom.refresh = null;
+    dom.filter = null;
+    dom.filterClear = null;
+    dom.count = null;
+    dom.grid = null;
+    dom.gridState = null;
+
+    const html = [
+      '<section class="sf-lib">',
+      facetPanelHtml(),
+      '<div class="sf-lib-main">',
+      '<div class="sf-toolbar">',
+      '<div class="sf-field" style="position:relative"><label class="sf-sr-only" for="sf-lib-filter">按名称、摘要或标签过滤技能</label>',
+      '<input class="sf-input" id="sf-lib-filter" type="search" autocomplete="off" placeholder="过滤：名称 / 摘要 / 标签 / 拼音">',
+      '<div class="sf-suggest" id="sf-lib-suggest" hidden></div></div>',
+      '<div class="sf-field sf-pop" style="flex:0 0 auto; position:relative"><button class="sf-btn sf-btn--ghost" type="button" id="sf-lib-sort-btn" aria-haspopup="true" aria-expanded="false">排序</button>',
+      '<div class="sf-sort-panel" id="sf-lib-sort-panel" hidden></div></div>',
+      '<div class="sf-field sf-pop" style="flex:0 0 auto; position:relative"><button class="sf-btn sf-btn--ghost" type="button" id="sf-lib-views-btn" aria-haspopup="true" aria-expanded="false">视图</button>',
+      '<div class="sf-view-menu" id="sf-lib-views" hidden></div></div>',
+      '<span class="sf-count" id="sf-lib-count" aria-live="polite">共 0 个</span>',
+      '<button class="sf-btn sf-btn--ghost" type="button" id="sf-lib-clear" hidden>清除筛选</button>',
+      '<button class="sf-btn sf-btn--ghost" type="button" id="sf-lib-reload">重新加载</button>',
+      '</div>',
+      '<div class="sf-grid" id="sf-lib-grid"></div>',
+      '<div class="sf-state" id="sf-lib-state" hidden></div>',
+      '</div>',
+      '</section>'
+    ].join('');
+
+    return {
+      title: '技能库',
+      html: html,
+      action: { label: '重新加载', onClick: function () { reloadSkills(); } },
+      mount: function () {
+        dom.grid = $('#sf-lib-grid', dom.main);
+        dom.gridState = $('#sf-lib-state', dom.main);
+        dom.filter = $('#sf-lib-filter', dom.main);
+        dom.filterClear = $('#sf-lib-clear', dom.main);
+        dom.count = $('#sf-lib-count', dom.main);
+        dom.refresh = $('#sf-lib-reload', dom.main);
+        suggestEl = $('#sf-lib-suggest', dom.main);
+
+        if (pendingQuery) {
+          dom.filter.value = pendingQuery;
+          libFacet.query = pendingQuery.toLowerCase();
+          pendingQuery = '';
+        }
+
+        const sortBtn = $('#sf-lib-sort-btn', dom.main);
+        const sortPanel = $('#sf-lib-sort-panel', dom.main);
+        sortBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const open = sortPanel.hidden;
+          closeLibraryPopovers();
+          if (open) { renderSortPanel(); sortPanel.hidden = false; sortBtn.setAttribute('aria-expanded', 'true'); }
+        });
+
+        const viewsBtn = $('#sf-lib-views-btn', dom.main);
+        const viewsMenu = $('#sf-lib-views', dom.main);
+        viewsBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const open = viewsMenu.hidden;
+          closeLibraryPopovers();
+          if (open) { renderViewsMenu(); viewsMenu.hidden = false; viewsBtn.setAttribute('aria-expanded', 'true'); }
+        });
+
+        dom.filter.addEventListener('input', function () {
+          window.clearTimeout(filterTimer);
+          filterTimer = window.setTimeout(function () {
+            libFacet.query = str(dom.filter.value).toLowerCase();
+            applyLibraryFilter();
+            computeAndShowSuggest(libFacet.query);
+          }, FILTER_DEBOUNCE_MS);
+        });
+
+        dom.filter.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if (!suggestEl.hidden) { e.preventDefault(); moveSuggest(e.key === 'ArrowDown' ? 1 : -1); }
+            return;
+          }
+          if (e.key === 'Enter') {
+            if (activeSuggest !== -1 && suggestItems[activeSuggest]) {
+              e.preventDefault();
+              pickSuggest(suggestItems[activeSuggest]);
+            }
+            return;
+          }
+          if (e.key === 'Escape') {
+            if (!suggestEl.hidden) { hideSuggest(); e.preventDefault(); return; }
+            if (dom.filter.value) {
+              e.preventDefault();
+              dom.filter.value = '';
+              libFacet.query = '';
+              applyLibraryFilter();
+              hideSuggest();
+            }
+          }
+        });
+
+        dom.filter.addEventListener('blur', function () {
+          window.setTimeout(hideSuggest, 120);
+        });
+
+        dom.refresh.addEventListener('click', function () { reloadSkills(); });
+
+        dom.filterClear.addEventListener('click', function () {
+          resetFacets();
+          applyLibraryFilter();
+          dom.filter.focus();
+        });
+
+        applyViewFromHash();
+
+        applyLibraryFilter();
+      }
+    };
+  };
+
+  /* ========================================================================
+     各页：技能详情
+     ======================================================================== */
+  pages.libraryDetail = function (slug) {
+    const skill = slug ? dataSource.libraryDetail(slug) : null;
+    state.detailSkill = skill;
+    if (!skill) {
+      return {
+        title: '技能详情',
+        html: [
+          '<section class="sf-panel" aria-labelledby="dt-title">',
+          '<div class="sf-panel-head"><h2 class="sf-panel-title" id="dt-title">技能详情</h2>',
+          '<a class="sf-btn sf-btn--ghost" href="#/library">返回技能库</a></div>',
+          '<div class="sf-state sf-state--error"><p class="sf-state-title">找不到这个技能</p>',
+          '<p class="sf-state-body">路径 ' + codeTag(slug || '') + ' 在当前技能库里没有匹配项。'
+            + '它可能尚未扫描，或 slug 已变化。</p></div>',
+          '</section>'
+        ].join('')
+      };
+    }
+
+    const tagsHtml = skill.tags.length
+      ? '<ul class="sf-tags">' + skill.tags.map(function (t) {
+          return '<li class="sf-tag">' + escapeHtml(t) + '</li>';
+        }).join('') + '</ul>'
+      : '<p class="sf-hint">无标签</p>';
+
+    const triggersHtml = skill.triggers.length
+      ? '<ul class="sf-tags">' + skill.triggers.map(function (t) {
+          return '<li class="sf-tag">' + escapeHtml(t) + '</li>';
+        }).join('') + '</ul>'
+      : '<p class="sf-hint">无触发词</p>';
+
+    const statusPill = skill.enabled
+      ? '<span class="sf-status-pill is-on">● 已启用</span>'
+      : '<span class="sf-status-pill is-off">○ 已停用</span>';
+
+    const summary = skill.summary
+      ? '<p class="sf-summary sf-summary--full">' + escapeHtml(skill.summary) + '</p>'
+      : '<p class="sf-summary sf-summary--empty">暂无摘要</p>';
+
+    const pathCopy = skill.path
+      ? '<button class="sf-copy" type="button" data-copy-text="' + escapeHtml(skill.path)
+        + '" aria-label="复制完整路径">复制完整路径</button>'
+      : '';
+
+    const metaHtml = [
+      '<dl class="sf-kv">',
+      '<dt>slug</dt><dd>' + (skill.slug ? escapeHtml(skill.slug) : '<span class="sf-hint">无</span>') + '</dd>',
+      '<dt>路径</dt><dd>' + (skill.path
+        ? '<code class="sf-path" title="' + escapeHtml(skill.path) + '">' + escapeHtml(maskPath(skill.path)) + '</code> ' + pathCopy
+        : '<span class="sf-hint">服务端未返回</span>') + '</dd>',
+      '<dt>版本</dt><dd>v' + escapeHtml(skill.version) + '</dd>',
+      '<dt>作者</dt><dd>' + (skill.author ? escapeHtml(skill.author) : '<span class="sf-hint">未知</span>') + '</dd>',
+      '<dt>采纳率</dt><dd id="sf-dt-score">' + scoreDetailHtml(skill) + '</dd>',
+      '<dt>状态</dt><dd>' + statusPill + '</dd>',
+      '</dl>'
+    ].join('');
+
+    const actions = [
+      '<button class="sf-btn" type="button" id="sf-dt-add">加入工作台</button>',
+      '<button class="sf-btn sf-btn--ghost" type="button" id="sf-dt-share">分享</button>',
+      '<a class="sf-btn sf-btn--ghost" href="#/library">返回库</a>'
+    ].join('');
+
+    const html = [
+      '<section class="sf-detail" aria-labelledby="dt-name">',
+      '<div>',
+      '<div class="sf-detail-head">',
+      '<div class="sf-detail-title"><h2 class="sf-detail-name" id="dt-name">' + escapeHtml(skill.name) + '</h2>',
+      '<p class="sf-detail-meta">v' + escapeHtml(skill.version)
+        + (skill.author ? ' · ' + escapeHtml(skill.author) : '') + '</p></div>',
+      '<div class="sf-detail-actions">' + actions + '</div>',
+      '</div>',
+      metaHtml,
+      '</div>',
+      '<div>',
+      '<div class="sf-panel" style="margin-bottom:var(--sf-space-4)">',
+      '<div class="sf-panel-head"><h3 class="sf-panel-title">摘要</h3>',
+      (skill.summaryFallback ? '<span class="sf-badge">自动摘要</span>' : ''),
+      '</div>', summary, '</div>',
+      '<div class="sf-panel" style="margin-bottom:var(--sf-space-4)"><h3 class="sf-panel-title">标签</h3>',
+      tagsHtml, '</div>',
+      '<div class="sf-panel"><h3 class="sf-panel-title">触发词（triggers）</h3>',
+      triggersHtml, '</div>',
+      '</div>',
+      '</section>'
+    ].join('');
+
+    return {
+      title: '技能详情',
+      html: html,
+      mount: function () {
+        $('#sf-dt-add', dom.main).addEventListener('click', function () {
+          addToWorkbench(skill);
+          showToast('已加入工作台草稿', 'ok');
+        });
+        $('#sf-dt-share', dom.main).addEventListener('click', function () {
+          const link = location.origin + location.pathname + '#/library/'
+            + encodeURIComponent(skill.slug || skill.id);
+          copyText(link).then(function (ok) {
+            showToast(ok ? '分享链接已复制' : '复制失败，请手动复制', ok ? 'ok' : 'fail');
+          });
+        });
+      }
+    };
+  };
+
+  /* ========================================================================
+     各页：路由试验台（沿用良好结构 + 增强）
+     ======================================================================== */
+  pages.lab = function () {
+    const history = getLabHistory();
+    const historyOpts = history.length
+      ? '<option value="">最近任务…</option>' + history.map(function (t) {
+          return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>';
+        }).join('')
+      : '<option value="">（暂无历史）</option>';
+
+    const html = [
+      '<section class="sf-panel" aria-labelledby="lab-title">',
+      '<div class="sf-panel-head"><h2 class="sf-panel-title" id="lab-title">路由试验台</h2>',
+      '<p class="sf-panel-note">输入任务，看 SkillForge 会把哪个技能交给 Metis</p></div>',
+      '<form class="sf-lab-form" id="sf-lab-form" novalidate>',
+      '<div class="sf-field"><label class="sf-sr-only" for="sf-task">任务描述</label>',
+      '<input class="sf-input" id="sf-task" type="text" autocomplete="off" spellcheck="false"',
+      ' placeholder="例如：帮我写一个 Spring Boot 的分页接口" aria-describedby="sf-task-hint"></div>',
+      '<button class="sf-btn" type="submit" id="sf-submit">匹配</button>',
+      '</form>',
+      '<p class="sf-sr-only" id="sf-task-hint">按回车或点「匹配」提交；请求超过 15 秒会自动中断。</p>',
+      '<details class="sf-advanced">',
+      '<summary class="sf-advanced-sum">高级项：阈值 / 模型</summary>',
+      '<div class="sf-advanced-body">',
+      '<div class="sf-field"><label class="sf-sr-only" for="sf-threshold">匹配阈值</label>',
+      '<input class="sf-input" id="sf-threshold" type="number" step="0.05" min="0" max="1" value="0.5" placeholder="阈值 0–1（mock）"></div>',
+      '<div class="sf-field"><label class="sf-sr-only" for="sf-model">模型</label>',
+      '<select class="sf-select" id="sf-model"><option>default</option><option>high-recall</option><option>fast</option></select></div>',
+      '</div>',
+      '</details>',
+      '<div class="sf-field" style="margin-top:var(--sf-space-3)"><label class="sf-sr-only" for="sf-history">历史任务</label>',
+      '<select class="sf-select" id="sf-history" style="width:100%">' + historyOpts + '</select></div>',
+      '<div class="sf-lab-result" id="sf-result" role="region" aria-label="匹配结果" aria-live="polite"></div>',
+      '</section>'
+    ].join('');
+
+    return {
+      title: '路由试验台',
+      html: html,
+      mount: function () {
+        dom.form = $('#sf-lab-form', dom.main);
+        dom.task = $('#sf-task', dom.main);
+        dom.submit = $('#sf-submit', dom.main);
+        dom.result = $('#sf-result', dom.main);
+
+        dom.form.addEventListener('submit', function (e) { e.preventDefault(); submitMatch(); });
+        $('#sf-history', dom.main).addEventListener('change', function (e) {
+          if (e.target.value) { dom.task.value = e.target.value; }
+        });
+
+        renderMatchIdle();
+      }
+    };
+  };
+
+  /* ========================================================================
+     各页：工作台（mock）
+     ======================================================================== */
+  const wbState = { items: [], currentId: null, lastSaved: null, dirty: false };
+
+  function addToWorkbench(skill) {
+    const items = dataSource.workbenchList().slice();
+    const id = 'wb-' + Date.now().toString(36);
+    items.unshift({
+      id: id, name: skill.name, description: skill.summary || '由技能库加入的草稿',
+      source: 'local', updatedAt: nowIso(), body: skill.summary || ''
+    });
+    dataSource.workbenchSave(items);
+    wbState.items = items;
+    wbState.currentId = id;
+    wbState.lastSaved = findWb(id);
+    wbState.dirty = false;
+    renderWorkbenchEditor();
+  }
+
+  function findWb(id) {
+    return wbState.items.find(function (x) { return x.id === id; }) || null;
+  }
+
+  function renderWorkbenchList() {
+    const listEl = $('#sf-wb-list', dom.main);
+    if (!listEl) { return; }
+    if (!wbState.items.length) {
+      listEl.innerHTML = '<p class="sf-hint">还没有草稿，点「新建 Prompt」开始。</p>';
+      return;
+    }
+    listEl.innerHTML = wbState.items.map(function (it) {
+      return '<button class="sf-wb-item' + (it.id === wbState.currentId ? ' is-current' : '')
+        + '" type="button" data-wb-id="' + escapeHtml(it.id) + '">'
+        + '<span class="sf-wb-item-name">' + escapeHtml(it.name) + '</span>'
+        + '<span class="sf-wb-item-src">' + escapeHtml(it.source === 'team' ? '团队' : '本机') + '</span>'
+        + '</button>';
+    }).join('');
+    $$('.sf-wb-item', listEl).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        selectWorkbench(btn.getAttribute('data-wb-id'));
+      });
+    });
+  }
+
+  function renderWorkbenchEditor() {
+    const wrap = $('#sf-wb-editor', dom.main);
+    if (!wrap) { return; }
+    const current = findWb(wbState.currentId);
+    if (!current) {
+      wrap.innerHTML = '<div class="sf-state sf-state--empty"><p class="sf-state-title">未选择草稿</p>'
+        + '<p class="sf-state-body">从左侧选择一项，或点「新建 Prompt」。</p></div>';
+      return;
+    }
+    wrap.innerHTML = [
+      '<div class="sf-wb-fields">',
+      '<div class="sf-field"><label class="sf-sr-only" for="sf-wb-name">名称</label>',
+      '<input class="sf-input" id="sf-wb-name" value="' + escapeHtml(current.name) + '" placeholder="Prompt 名称"></div>',
+      '<div class="sf-field"><label class="sf-sr-only" for="sf-wb-desc">描述</label>',
+      '<input class="sf-input" id="sf-wb-desc" value="' + escapeHtml(current.description || '') + '" placeholder="一句话描述"></div>',
+      '</div>',
+      '<div class="sf-wb-split">',
+      '<div class="sf-field"><label class="sf-sr-only" for="sf-wb-body">正文（支持 {{变量}}）</label>',
+      '<textarea class="sf-textarea" id="sf-wb-body" aria-describedby="sf-wb-preview-hint">' + escapeHtml(current.body) + '</textarea></div>',
+      '<div class="sf-field"><span class="sf-sr-only" id="sf-wb-preview-hint">实时预览</span>',
+      '<div class="sf-preview" id="sf-wb-preview" aria-live="polite"></div></div>',
+      '</div>',
+      '<div class="sf-wb-foot">',
+      '<span class="sf-dirty-dot" id="sf-wb-dirty"' + (wbState.dirty ? '' : ' hidden') + '>未保存</span>',
+      '<span class="sf-hint" id="sf-wb-updated">更新于 ' + escapeHtml(current.updatedAt || '—') + '</span>',
+      '<button class="sf-btn sf-btn--ghost" type="button" id="sf-wb-reset">重置</button>',
+      '<button class="sf-btn sf-btn--ghost sf-btn--danger" type="button" id="sf-wb-delete">删除</button>',
+      '<button class="sf-btn" type="button" id="sf-wb-save">保存</button>',
+      '</div>'
+    ].join('');
+
+    const nameEl = $('#sf-wb-name', wrap);
+    const descEl = $('#sf-wb-desc', wrap);
+    const bodyEl = $('#sf-wb-body', wrap);
+    const previewEl = $('#sf-wb-preview', wrap);
+
+    function renderPreview() {
+      const v = bodyEl.value;
+      const safe = escapeHtml(v);
+      previewEl.innerHTML = safe.replace(/\{\{\s*([^}]+?)\s*\}\}/g,
+        function (_, name) { return '<span class="sf-var">{{' + escapeHtml(name) + '}}</span>'; });
+    }
+    function markDirty() {
+      wbState.dirty = true;
+      const d = $('#sf-wb-dirty', wrap);
+      if (d) { d.hidden = false; }
+    }
+    nameEl.addEventListener('input', markDirty);
+    descEl.addEventListener('input', markDirty);
+    bodyEl.addEventListener('input', function () { markDirty(); renderPreview(); });
+    renderPreview();
+
+    $('#sf-wb-save', wrap).addEventListener('click', function () { saveWorkbench(); });
+    $('#sf-wb-reset', wrap).addEventListener('click', function () { selectWorkbench(wbState.currentId); });
+    $('#sf-wb-delete', wrap).addEventListener('click', function () { deleteWorkbench(); });
+  }
+
+  function selectWorkbench(id) {
+    wbState.currentId = id;
+    wbState.lastSaved = findWb(id);
+    wbState.dirty = false;
+    renderWorkbenchList();
+    renderWorkbenchEditor();
+  }
+
+  function saveWorkbench() {
+    const current = findWb(wbState.currentId);
+    if (!current) { return; }
+    const nameEl = $('#sf-wb-name', dom.main);
+    const descEl = $('#sf-wb-desc', dom.main);
+    const bodyEl = $('#sf-wb-body', dom.main);
+    if (!nameEl || !bodyEl) { return; }
+
+    const snapshot = { name: current.name, description: current.description, body: current.body };
+    current.name = str(nameEl.value) || '未命名 Prompt';
+    current.description = str(descEl ? descEl.value : '');
+    current.body = bodyEl.value;
+    current.updatedAt = nowIso();
+
+    const saved = dataSource.workbenchSave(wbState.items);
+    if (!saved) {
+      // 失败回滚
+      current.name = snapshot.name;
+      current.description = snapshot.description;
+      current.body = snapshot.body;
+      showToast('保存失败，已回滚', 'fail');
+      return;
+    }
+    wbState.dirty = false;
+    wbState.lastSaved = findWb(wbState.currentId);
+    const d = $('#sf-wb-dirty', dom.main);
+    if (d) { d.hidden = true; }
+    const u = $('#sf-wb-updated', dom.main);
+    if (u) { u.textContent = '更新于 ' + current.updatedAt; }
+    renderWorkbenchList();
+    showToast('已保存', 'ok');
+  }
+
+  function deleteWorkbench() {
+    const current = findWb(wbState.currentId);
+    if (!current) { return; }
+    if (!window.confirm('确定删除「' + current.name + '」？此操作不可撤销。')) { return; }
+    wbState.items = wbState.items.filter(function (x) { return x.id !== current.id; });
+    dataSource.workbenchSave(wbState.items);
+    wbState.currentId = wbState.items.length ? wbState.items[0].id : null;
+    wbState.lastSaved = wbState.currentId ? findWb(wbState.currentId) : null;
+    wbState.dirty = false;
+    renderWorkbenchList();
+    renderWorkbenchEditor();
+    showToast('已删除', 'ok');
+  }
+
+  function newWorkbench() {
+    const items = dataSource.workbenchList().slice();
+    const id = 'wb-' + Date.now().toString(36);
+    items.unshift({
+      id: id, name: '未命名 Prompt', description: '', source: 'local',
+      updatedAt: nowIso(), body: '任务：{{task}}\n\n输出：'
+    });
+    dataSource.workbenchSave(items);
+    wbState.items = items;
+    selectWorkbench(id);
+  }
+
+  /* 工作台骨架：pages.workbench 与 pages.workbenchDetail 共用一份，
+     避免 sf-wb-new / sf-wb-list / sf-wb-editor / wb-title 在源码里出现两次 */
+  function workbenchSectionHtml() {
+    return [
+      '<section class="sf-wb" aria-labelledby="wb-title">',
+      '<div class="sf-wb-list" aria-label="草稿与模板">',
+      '<div class="sf-panel-head" style="margin-bottom:var(--sf-space-2)"><h2 class="sf-panel-title" id="wb-title" style="font-size:var(--sf-font-md)">草稿 / 模板</h2>',
+      '<button class="sf-btn sf-btn--ghost" type="button" id="sf-wb-new">新建</button></div>',
+      '<p class="sf-demo-note"><span class="sf-badge sf-badge--demo">示例数据</span>无后端接口：草稿只存在本机浏览器，预置模板为演示数据</p>',
+      '<div id="sf-wb-list"></div>',
+      '</div>',
+      '<div id="sf-wb-editor"></div>',
+      '</section>'
+    ].join('');
+  }
+
+  pages.workbench = function () {
+    wbState.items = dataSource.workbenchList();
+    wbState.currentId = wbState.items.length ? wbState.items[0].id : null;
+    wbState.lastSaved = wbState.currentId ? findWb(wbState.currentId) : null;
+    wbState.dirty = false;
+
+    const html = workbenchSectionHtml();
+
+    return {
+      title: '工作台',
+      html: html,
+      action: { label: '新建 Prompt', onClick: newWorkbench },
+      mount: function () {
+        $('#sf-wb-new', dom.main).addEventListener('click', newWorkbench);
+        renderWorkbenchList();
+        renderWorkbenchEditor();
+      }
+    };
+  };
+
+  pages.workbenchDetail = function (id) {
+    // 深链：直接定位到指定草稿
+    wbState.items = dataSource.workbenchList();
+    const found = wbState.items.find(function (x) { return x.id === id; });
+    wbState.currentId = found ? id : (wbState.items.length ? wbState.items[0].id : null);
+    wbState.lastSaved = wbState.currentId ? findWb(wbState.currentId) : null;
+    wbState.dirty = false;
+
+    const html = workbenchSectionHtml();
+
+    return {
+      title: '工作台',
+      html: html,
+      action: { label: '新建 Prompt', onClick: newWorkbench },
+      mount: function () {
+        $('#sf-wb-new', dom.main).addEventListener('click', newWorkbench);
+        renderWorkbenchList();
+        renderWorkbenchEditor();
+      }
+    };
+  };
+
+  /* ========================================================================
+     各页：团队市场（mock）
+     ======================================================================== */
+  const marketState = { source: 'local', query: '', tag: '', sort: 'rating' };
+
+  function marketMatches(item) {
+    if (marketState.source && item.source !== marketState.source) { return false; }
+    if (marketState.tag && item.tags.indexOf(marketState.tag) === -1) { return false; }
+    if (marketState.query) {
+      const q = marketState.query.toLowerCase();
+      const hay = (item.name + ' ' + item.summary + ' ' + item.author + ' ' + item.tags.join(' ')).toLowerCase();
+      if (hay.indexOf(q) === -1) { return false; }
+    }
+    return true;
+  }
+
+  function marketCardHtml(item) {
+    const tagsHtml = item.tags.length
+      ? '<ul class="sf-tags">' + item.tags.map(function (t) {
+          return '<li class="sf-tag">' + escapeHtml(t) + '</li>';
+        }).join('') + '</ul>'
+      : '';
+    return [
+      '<article class="sf-card">',
+      '<div class="sf-card-head">',
+      '<span class="sf-avatar" aria-hidden="true">' + escapeHtml(firstChar(item.name)) + '</span>',
+      '<div class="sf-card-title"><h3 class="sf-card-name">' + escapeHtml(item.name) + '</h3>',
+      '<p class="sf-card-meta">' + escapeHtml(item.author) + ' · <span class="sf-market-rate" title="演示评分，不是真实用户评价">★ '
+        + item.rating.toFixed(1) + ' · 示例</span></p>',
+      '</div></div>',
+      '<p class="sf-summary sf-summary--full">' + escapeHtml(item.summary) + '</p>',
+      tagsHtml,
+      '<div class="sf-card-foot"><button class="sf-btn sf-btn--ghost" type="button" data-market-id="'
+        + escapeHtml(item.id) + '">安装到本机</button></div>',
+      '</article>'
+    ].join('');
+  }
+
+  function allMarketTags() {
+    const set = {};
+    dataSource.marketList().forEach(function (m) {
+      m.tags.forEach(function (t) { set[t] = true; });
+    });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'zh'); });
+  }
+
+  pages.market = function () {
+    const tags = allMarketTags();
+    const tagOpts = ['<option value="">全部标签</option>'].concat(tags.map(function (t) {
+      return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>';
+    })).join('');
+
+    const html = [
+      '<section class="sf-panel" aria-labelledby="mk-title">',
+      '<div class="sf-panel-head"><h2 class="sf-panel-title" id="mk-title">团队市场</h2>',
+      '<p class="sf-panel-note"><span class="sf-badge sf-badge--demo">示例数据</span> 接口未接入，以下为演示数据</p></div>',
+      '<div class="sf-toolbar">',
+      '<div class="sf-segment" role="group" aria-label="来源切换">',
+      '<button type="button" data-source="local" class="is-on">本机推荐</button>',
+      '<button type="button" data-source="team">团队共享</button>',
+      '</div>',
+      '<div class="sf-field"><label class="sf-sr-only" for="sf-mk-search">搜索市场</label>',
+      '<input class="sf-input" id="sf-mk-search" type="search" autocomplete="off" placeholder="搜索名称 / 作者 / 标签"></div>',
+      '<div class="sf-field" style="flex:0 0 auto"><label class="sf-sr-only" for="sf-mk-tag">按标签筛选</label>',
+      '<select class="sf-select" id="sf-mk-tag">' + tagOpts + '</select></div>',
+      '<div class="sf-field" style="flex:0 0 auto"><label class="sf-sr-only" for="sf-mk-sort">排序</label>',
+      '<select class="sf-select" id="sf-mk-sort">',
+      '<option value="rating">评分高到低</option>',
+      '<option value="name">名称 A–Z</option>',
+      '</select></div>',
+      '</div>',
+      '<div class="sf-grid" id="sf-mk-grid"></div>',
+      '<div class="sf-state" id="sf-mk-state" hidden></div>',
+      '</section>'
+    ].join('');
+
+    return {
+      title: '团队市场',
+      html: html,
+      action: { label: '刷新市场', onClick: function () { renderMarket(); showToast('已刷新市场（mock）', 'ok'); } },
+      mount: function () {
+        const grid = $('#sf-mk-grid', dom.main);
+        const stateEl = $('#sf-mk-state', dom.main);
+        const search = $('#sf-mk-search', dom.main);
+        const tagSel = $('#sf-mk-tag', dom.main);
+        const sortSel = $('#sf-mk-sort', dom.main);
+
+        function renderMarketInner() {
+          let list = dataSource.marketList().filter(marketMatches);
+          if (marketState.sort === 'name') {
+            list.sort(function (a, b) { return a.name.localeCompare(b.name, 'zh'); });
+          } else {
+            list.sort(function (a, b) { return b.rating - a.rating; });
+          }
+          if (list.length === 0) {
+            stateEl.hidden = false;
+            stateEl.className = 'sf-state sf-state--empty';
+            stateEl.innerHTML = '<p class="sf-state-title">没有匹配的市场技能</p>'
+              + '<p class="sf-state-body">换一个来源、标签或关键词试试。</p>';
+            grid.hidden = true;
+            return;
+          }
+          grid.hidden = false;
+          stateEl.hidden = true;
+          grid.innerHTML = list.map(marketCardHtml).join('');
+        }
+        window.__renderMarket = renderMarketInner;
+
+        $$('button[data-source]', dom.main).forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            marketState.source = btn.getAttribute('data-source');
+            $$('button[data-source]', dom.main).forEach(function (b) {
+              b.classList.toggle('is-on', b === btn);
+            });
+            renderMarketInner();
+          });
+        });
+
+        search.addEventListener('input', function () {
+          window.clearTimeout(filterTimer);
+          filterTimer = window.setTimeout(function () {
+            marketState.query = str(search.value).toLowerCase();
+            renderMarketInner();
+          }, FILTER_DEBOUNCE_MS);
+        });
+        tagSel.addEventListener('change', function () { marketState.tag = tagSel.value; renderMarketInner(); });
+        sortSel.addEventListener('change', function () { marketState.sort = sortSel.value; renderMarketInner(); });
+
+        grid.addEventListener('click', function (e) {
+          const t = e.target;
+          if (!(t instanceof Element)) { return; }
+          const btn = t.closest('[data-market-id]');
+          if (!btn) { return; }
+          const id = btn.getAttribute('data-market-id');
+          installMarket(id);
+        });
+
+        renderMarketInner();
+      }
+    };
+  };
+
+  function renderMarket() {
+    if (window.__renderMarket) { window.__renderMarket(); }
+  }
+
+  function installMarket(id) {
+    const item = dataSource.marketList().find(function (m) { return m.id === id; });
+    if (!item) { return; }
+    const items = dataSource.workbenchList().slice();
+    if (items.some(function (x) { return x.id === 'mk-' + id; })) {
+      showToast('该技能已在草稿中', 'ok');
+      return;
+    }
+    items.unshift({
+      id: 'mk-' + id, name: item.name, description: item.summary,
+      source: 'team', updatedAt: nowIso(), body: item.summary || ''
+    });
+    dataSource.workbenchSave(items);
+    showToast('已安装「' + item.name + '」到本机草稿', 'ok');
+  }
+
+  /* ========================================================================
+     各页：设置（mock）
+     ======================================================================== */
+  pages.settings = function () {
+    const s = dataSource.settingsGet();
+    const themeChecked = function (v) { return s.theme === v ? ' checked' : ''; };
+    const sortOpts = [
+      ['recent', '最近 / 相关度'], ['name', '名称 A–Z'],
+      ['version', '版本号降序'], ['author', '作者']
+    ].map(function (o) {
+      return '<option value="' + o[0] + '"' + (s.defaultSort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+    }).join('');
+
+    const html = [
+      '<section class="sf-panel sf-settings-group" aria-labelledby="st-pref">',
+      '<div class="sf-panel-head"><h2 class="sf-panel-title" id="st-pref">偏好</h2></div>',
+      '<div class="sf-set-row"><div><div class="sf-set-label">主题</div>',
+      '<div class="sf-set-desc">深 / 浅 / 跟随系统，存于本机</div></div>',
+      '<div class="sf-set-control">',
+      '<label class="sf-radio"><input type="radio" name="sf-theme" value="auto"' + themeChecked('auto') + '>跟随</label>',
+      '<label class="sf-radio"><input type="radio" name="sf-theme" value="dark"' + themeChecked('dark') + '>深</label>',
+      '<label class="sf-radio"><input type="radio" name="sf-theme" value="light"' + themeChecked('light') + '>浅</label>',
+      '</div></div>',
+      '<div class="sf-set-row"><div><div class="sf-set-label">默认排序</div>',
+      '<div class="sf-set-desc">技能库与搜索的默认排序</div></div>',
+      '<div class="sf-set-control"><select class="sf-select" id="sf-set-sort">' + sortOpts + '</select></div></div>',
+      '<div class="sf-set-row"><div><div class="sf-set-label">减少动效</div>',
+      '<div class="sf-set-desc">由系统「减弱动态效果」控制，本页不改写</div></div>',
+      '<div class="sf-set-control"><span class="sf-chip">跟随系统</span></div></div>',
+      '</section>',
+
+      '<section class="sf-panel sf-settings-group" aria-labelledby="st-data">',
+      '<div class="sf-panel-head"><h2 class="sf-panel-title" id="st-data">数据源</h2></div>',
+      '<p class="sf-demo-note"><span class="sf-badge sf-badge--demo">示例数据</span>接口未接入：home 路径与「立即扫描」为演示，真实数据以终端为准</p>',
+      '<div class="sf-set-row"><div><div class="sf-set-label">本机 home</div>',
+      '<div class="sf-set-desc">只读展示，来自运行 sfx 的终端</div></div>',
+      '<div class="sf-set-control"><input class="sf-input" id="sf-set-home" value="' + escapeHtml(s.home)
+        + '" readonly aria-readonly="true"></div></div>',
+      '<div class="sf-set-row"><div><div class="sf-set-label">立即扫描</div>',
+      '<div class="sf-set-desc">演示按钮，不会真的扫描；真实扫描请在终端运行 sfx scan</div></div>',
+      '<div class="sf-set-control"><button class="sf-btn" type="button" id="sf-set-scan">立即扫描</button></div></div>',
+      '</section>',
+
+      '<section class="sf-panel sf-settings-group" aria-labelledby="st-about">',
+      '<div class="sf-panel-head"><h2 class="sf-panel-title" id="st-about">关于</h2></div>',
+      '<div class="sf-set-row"><div><div class="sf-set-label">版本</div></div>',
+      '<div class="sf-set-control"><span class="sf-chip">SkillForge ' + escapeHtml(s.version) + '</span></div></div>',
+      '<div class="sf-set-row"><div><div class="sf-set-label">断网可用</div>',
+      '<div class="sf-set-desc">零外部依赖，纯前端单文件，离线可用</div></div>',
+      '<div class="sf-set-control"><span class="sf-chip is-ok">本机数据 · 断网可用</span></div></div>',
+      '</section>'
+    ].join('');
+
+    return {
+      title: '设置',
+      html: html,
+      mount: function () {
+        $$('input[name="sf-theme"]', dom.main).forEach(function (radio) {
+          radio.addEventListener('change', function () {
+            if (!radio.checked) { return; }
+            try { localStorage.setItem(LS.theme, radio.value); } catch (e) { /* ignore */ }
+            applyTheme();
+            showToast('主题已设为' + ({ auto: '跟随系统', dark: '深', light: '浅' })[radio.value], 'ok');
+          });
+        });
+        $('#sf-set-sort', dom.main).addEventListener('change', function (e) {
+          const next = Object.assign({}, dataSource.settingsGet(), { defaultSort: e.target.value });
+          dataSource.settingsSave(next);
+          const sortMap = {
+            recent: [{ key: 'recent', dir: 1 }],
+            name: [{ key: 'name', dir: 1 }],
+            version: [{ key: 'version', dir: -1 }],
+            author: [{ key: 'author', dir: 1 }]
+          };
+          if (sortMap[e.target.value]) {
+            libSortFields = sortMap[e.target.value];
+            if (dom.filter && $('#sf-lib-grid', dom.main)) { applyLibraryFilter(); }
+          }
+          showToast('默认排序已保存', 'ok');
+        });
+        $('#sf-set-scan', dom.main).addEventListener('click', function () {
+          showToast('演示按钮：真实扫描请在终端运行 sfx scan', 'ok');
+        });
+      }
+    };
+  };
+
+  /* ========================================================================
+     抽屉 + 折叠（持久化 shell 交互）
+     ======================================================================== */
+  function openDrawer() {
+    dom.app.classList.add('nav-open');
+    dom.scrim.hidden = false;
+    dom.hamburger.setAttribute('aria-expanded', 'true');
+    const first = dom.side.querySelector('.sf-nav-link');
+    if (first) { window.setTimeout(function () { first.focus(); }, 0); }
+  }
+
+  function closeDrawer() {
+    dom.app.classList.remove('nav-open');
+    dom.scrim.hidden = true;
+    dom.hamburger.setAttribute('aria-expanded', 'false');
+    dom.hamburger.focus();
+  }
+
+  function toggleDrawer() {
+    if (dom.app.classList.contains('nav-open')) { closeDrawer(); }
+    else { openDrawer(); }
+  }
+
+  function trapFocus(event) {
+    if (!dom.app.classList.contains('nav-open')) { return; }
+    if (event.key !== 'Tab') { return; }
+    const focusables = $$('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])', dom.side)
+      .filter(function (el) { return el.offsetParent !== null; });
+    if (!focusables.length) { return; }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function bindShell() {
+    dom.hamburger.addEventListener('click', toggleDrawer);
+    dom.scrim.addEventListener('click', closeDrawer);
+    dom.collapse.addEventListener('click', function () {
+      const collapsed = dom.app.classList.toggle('is-collapsed');
+      dom.collapse.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+      dom.collapse.setAttribute('aria-label', collapsed ? '展开侧边栏' : '折叠侧边栏');
+      dom.collapse.textContent = collapsed ? '»' : '«';
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && dom.app.classList.contains('nav-open')) {
+        closeDrawer();
+        return;
+      }
+      trapFocus(event);
+    });
+
+    // 全局搜索 → 进入技能库并预填过滤词
+    dom.gsearchForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      pendingQuery = str(dom.gsearch.value);
+      dom.gsearch.value = '';
+      if (location.hash === '#/library') {
+        // 已在库内：直接应用
+        if (dom.filter) {
+          dom.filter.value = pendingQuery;
+          libFacet.query = pendingQuery.toLowerCase();
+          pendingQuery = '';
+          applyLibraryFilter();
+        }
+      } else {
+        location.hash = '#/library';
+      }
+    });
+
+    // 复制按钮委托（覆盖所有页）
+    dom.main.addEventListener('click', onCopyClick);
+
+    // 侧栏导航点击后关闭抽屉
+    dom.navList.addEventListener('click', function (e) {
+      if (e.target.closest('.sf-nav-link') && dom.app.classList.contains('nav-open')
+        && window.matchMedia('(max-width: 767px)').matches) {
+        // 延迟关闭，让 hashchange 先发生
+        window.setTimeout(closeDrawer, 0);
+      }
+    });
+
+    bindStatusbar();
+
+    // 库内浮层（排序 / 视图）点击外部关闭；浮层自身在 .sf-pop 内，不触发关闭
+    document.addEventListener('click', function (e) {
+      if (!e.target || !(e.target instanceof Element)) { return; }
+      if (e.target.closest('.sf-pop')) { return; }
+      closeLibraryPopovers();
+    });
+
+    window.addEventListener('hashchange', render);
+  }
+
+  /* ========================================================================
+     绑定与启动
+     ======================================================================== */
+  function init() {
+    cacheDom();
+    bindShell();
+    applyTheme();
+
+    state.skills = normalizeSkills(SKILLS);
+    state.filtered = state.skills.slice();
+
+    render();
+
+    // 首屏先按「数据不足」渲染，/api/scores 回来后再原地更新（不空白、不占位 0）
+    loadScores();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

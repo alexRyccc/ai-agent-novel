@@ -1,33 +1,29 @@
-HELP.md
-target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+# 构建与分发产物（可随时用 scripts/build.pyz.py 重建）
 build/
-!**/src/main/**/build/
-!**/src/test/**/build/
+dist/
 
-### VS Code ###
+# 临时文件
+.tmp/
+*.tmp
+page.html
+
+# 本地工具状态
+.workbuddy/
+.idea/
 .vscode/
+
+# 测试与类型检查缓存
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 系统
+.DS_Store
+Thumbs.db

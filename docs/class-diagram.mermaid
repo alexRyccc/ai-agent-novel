@@ -1,0 +1,271 @@
+# SkillForge 类图（领域模型 + 端口抽象）
+# 来源：docs/skillforge-ARCH.md §4.1 / §4.2
+
+classDiagram
+    class Skill {
+        +string ID
+        +string Name
+        +string Slug
+        +string Summary
+        +string Description
+        +string SourceRoot
+        +string DirPath
+        +string EntryPath
+        +string Author
+        +int Version
+        +SkillStatus Status
+        +Visibility Visibility
+        +string OwnerID
+        +string Origin
+        +string RemoteID
+        +string ContentHash
+        +int BodyBytes
+        +Time CreatedAt
+        +Time UpdatedAt
+        +IsUsable() bool
+        +IsVisibleTo(u) bool
+    }
+    class SkillVersion {
+        +string ID
+        +string SkillID
+        +int Version
+        +bytes BodyGzip
+        +string ContentHash
+        +string ChangeNote
+        +Time CreatedAt
+    }
+    class Tag {
+        +string ID
+        +string Name
+    }
+    class Trigger {
+        +string SkillID
+        +string Word
+        +int Weight
+    }
+    class PromptTemplate {
+        +string ID
+        +string Name
+        +string Slug
+        +string Scene
+        +string OwnerID
+        +Visibility Visibility
+        +int CurrentVersion
+        +Time UpdatedAt
+    }
+    class PromptVersion {
+        +string ID
+        +string TemplateID
+        +int Version
+        +string Branch
+        +string Body
+        +string VarsJSON
+        +Time CreatedAt
+        +Render(vars) string
+        +MissingVars(vars) stringList
+    }
+    class ABTest {
+        +string ID
+        +string TemplateID
+        +string TaskText
+        +int VariantA
+        +int VariantB
+        +Time CreatedAt
+    }
+    class ABVote {
+        +string ID
+        +string TestID
+        +string Side
+        +Vote Vote
+        +Time CreatedAt
+    }
+    class Session {
+        +string ID
+        +string TaskText
+        +string TaskHash
+        +Channel Channel
+        +string ProjectRoot
+        +string UserID
+        +string ClientID
+        +int MatchCount
+        +float TopScore
+        +string TopSkillID
+        +Time CreatedAt
+    }
+    class CallEvent {
+        +string ID
+        +string SessionID
+        +string SkillID
+        +EventType Type
+        +int Rank
+        +float Score
+        +int ElapsedMS
+        +string EngineVersion
+        +Channel Channel
+        +string PayloadJSON
+        +Time CreatedAt
+    }
+    class Feedback {
+        +string ID
+        +string SessionID
+        +string SkillID
+        +Vote Vote
+        +ReasonTag Reason
+        +string ReasonText
+        +FeedbackSource Source
+        +Time CreatedAt
+    }
+    class SkillScore {
+        +string SkillID
+        +int Impressions
+        +int Loads
+        +int Ups
+        +int Downs
+        +int Reworks
+        +float LoadRate
+        +float AdoptionRate
+        +float ReworkRate
+        +float Score
+        +int SampleSize
+        +bool Sufficient
+        +Time ComputedAt
+        +Compute() SkillScore
+    }
+    class ScoreDaily {
+        +string SkillID
+        +string Day
+        +int Impressions
+        +int Loads
+        +int Ups
+        +int Downs
+        +int Reworks
+        +float Score
+    }
+    class ConventionFile {
+        +string ID
+        +string PathNorm
+        +string Kind
+        +string ProjectRoot
+        +int AnchorVersion
+        +string BlockHash
+        +CFStatus Status
+        +bool Enabled
+        +Time UpdatedAt
+    }
+    class User {
+        +string ID
+        +string Username
+        +string DisplayName
+        +string PassHash
+        +string Salt
+        +Role Role
+        +UserStatus Status
+        +Time LastLoginAt
+        +CanReview() bool
+        +IsAdmin() bool
+    }
+    class WebSession {
+        +string ID
+        +string UserID
+        +Time ExpiresAt
+    }
+    class Submission {
+        +string ID
+        +string SkillID
+        +string SubmitterID
+        +SubStatus Status
+        +string ReviewerID
+        +string ReviewNote
+        +Visibility Visibility
+        +Time CreatedAt
+        +Time DecidedAt
+    }
+    class AuditLog {
+        +string ID
+        +string ActorID
+        +string Action
+        +string TargetType
+        +string TargetID
+        +string DetailJSON
+        +Time CreatedAt
+    }
+
+    Skill "1" --> "0..*" SkillVersion : 版本快照
+    Skill "1" --> "0..*" Tag : 多标签
+    Skill "1" --> "0..*" Trigger : 触发词
+    Skill "1" --> "0..1" SkillScore : 物化评分
+    Skill "1" --> "0..*" ScoreDaily : 趋势
+    Skill "1" --> "0..*" Submission : 提交审核
+    PromptTemplate "1" --> "1..*" PromptVersion : 版本
+    PromptTemplate "1" --> "0..*" ABTest : AB对比
+    ABTest "1" --> "0..*" ABVote : 投票
+    Session "1" --> "1..*" CallEvent : 曝光/加载事件
+    Session "1" --> "0..*" Feedback : 反馈
+    CallEvent "0..*" --> "1" Skill : 关联
+    Feedback "0..*" --> "1" Skill : 关联
+    User "1" --> "0..*" Submission : 提交人
+    User "1" --> "0..*" AuditLog : 操作者
+    User "1" --> "0..*" WebSession : 会话
+
+classDiagram
+    class Store {
+        <<interface>>
+        +Tx(ctx, fn) error
+        +Skills() SkillRepo
+        +Prompts() PromptRepo
+        +Events() EventRepo
+        +Feedbacks() FeedbackRepo
+        +Scores() ScoreRepo
+        +Users() UserRepo
+        +Submissions() SubmissionRepo
+        +Conventions() ConventionRepo
+        +Sync() SyncRepo
+        +Audit() AuditRepo
+        +Close() error
+    }
+    class SkillRepo {
+        <<interface>>
+        +Upsert(s) error
+        +Get(id) Skill
+        +List(q) SkillPage
+        +SetStatus(id, st) error
+        +SetVisibility(id, v) error
+        +AddVersion(v) error
+        +GetVersion(skillID, ver) SkillVersion
+        +AllUsable() SkillList
+    }
+    class EventRepo {
+        <<interface>>
+        +AppendSession(s) error
+        +AppendEvents(es) error
+        +Aggregate(skillID, from, to) Metrics
+        +DailyBuckets(skillID, days) BucketList
+        +PurgeBefore(ts) int
+    }
+    class SemanticProvider {
+        <<interface>>
+        +Kind() string
+        +Available() bool
+        +Score(ctx, query, doc) float64
+        +Warm() error
+    }
+    class FS {
+        <<interface>>
+        +Walk(root, fn) error
+        +ReadFile(p) bytes
+        +WriteAtomic(p, b, perm) error
+        +Stat(p) FileInfo
+    }
+    class NoneSemantic
+    class BM25Semantic
+    class ONNXSemantic
+    class SQLiteStore
+    class PostgresStore
+
+    Store <|.. SQLiteStore : 实现
+    Store <|.. PostgresStore : 未来实现
+    Store o-- SkillRepo : 组合
+    Store o-- EventRepo : 组合
+    SemanticProvider <|.. NoneSemantic
+    SemanticProvider <|.. BM25Semantic
+    SemanticProvider <|.. ONNXSemantic

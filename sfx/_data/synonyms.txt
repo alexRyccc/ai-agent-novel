@@ -1,0 +1,62 @@
+# SkillForge 同义词词典（包内资源，只能经 sfx/_res.py 读取）
+#
+# 格式：一行一组，标准词=同义词1,同义词2
+#   - `#` 开头为注释
+#   - 分隔符兼容半角/全角逗号与顿号
+#   - 任务描述里出现组内任意一个词，组内其它词也会参与匹配（折算系数 0.7）
+#   - **一个组 = 一个语义概念**：组内任意两个词必须真的可以互换着说。
+#     组越"宽"，泛化词就越容易把多份分堆给不相关的技能（见 W2-3 修复记录）。
+#
+# 这是 ARCH §7.2.1 的 S1 信号（关键词 + 同义词词典）的数据源。
+# 词典本身是"团队可维护"的：改这里**不需要改代码**——
+# `sfx scan` 会以包内资源为准重写 `<home>/cache/synonyms.json`，
+# `sfx match` 只读那份缓存（见 matcher.warm_synonym_cache）。
+
+# ---------------------------------------------------------------- 通用动词/名词
+重构=refactor,重构代码,重写,整理代码,代码重构
+性能优化=performance,性能,加速,提速,optimize,优化性能
+测试=test,单元测试,unit test,写测试,覆盖
+文档=doc,docs,写文档,注释,说明文档
+数据库=db,database,sql,数据访问,持久化,慢查询
+缓存=cache,Redis,redis,缓存层
+日志=log,logging,打日志,日志输出,结构化日志,可观测性
+错误处理=error,异常,exception,报错,异常处理,try catch
+并发=concurrent,多线程,thread,异步,async,协程
+安全=security,鉴权,权限,auth
+接口=api,endpoint,接口设计
+前端=frontend,ui
+后端=backend,服务端,server
+部署=deploy,发布,上线,release
+构建=build,编译,compile,打包,package
+依赖=dependency,依赖管理,第三方库,import
+迁移=migration,数据迁移,升级,upgrade
+配置=config,配置项,配置管理,setting
+代码审查=review,cr,评审,review code,review代码
+调试=debug,排查,定位问题,troubleshoot
+规范=标准,约定,编码规范,lint
+脚本=script,自动化,automation,batch
+搜索=search,检索,查询,query
+校验=validate,验证,validation,check
+加密=encrypt,加解密,hash,签名,signature
+导出=export,导出数据,备份,backup
+导入=import,导入数据,恢复,restore
+监控=monitor,告警,alert,可观测性,observability
+架构设计=架构,architecture,设计方案
+需求=需求文档,prd,需求说明
+排期=计划,计划安排,迭代,iteration
+
+# ---------------------------------------------------------------- 领域概念
+# Java / 架构
+领域建模=ddd,领域模型,domain model,限界上下文,聚合根,聚合
+
+# 代码扫描
+依赖漏洞=sca,依赖扫描,供应链安全,依赖漏洞检测
+安全问题=sast,安全扫描,静态应用安全测试,代码安全扫描
+
+# 前端 / UI
+设计系统=design system,design-system,design-tokens,设计令牌
+首屏=first screen,fcp,lcp,web-vitals,首屏渲染,首屏加载
+配色=色彩,色板,palette,color
+
+# 游戏美术
+像素=pixel,pixel-art,像素画,精灵图

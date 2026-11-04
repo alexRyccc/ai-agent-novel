@@ -1,0 +1,384 @@
+# SkillForge 关键时序图
+# 来源：docs/skillforge-ARCH.md §6.1 ~ §6.5
+# 顺序：①sfx match 打分 ②约定文件幂等 sync ③prime 逃生 ④团队 sync+审核 ⑤反馈补评→重算
+
+sequenceDiagram
+    autonumber
+    participant M as Metis (VSCode)
+    participant SH as Shell 子进程
+    participant MN as sfx/__main__.py
+    participant WD as 看门狗 3s
+    participant MS as core/service.Matcher
+    participant IX as 内存/缓存 MatchIndex
+    participant SE as SemanticProvider
+    participant ST as Store-SQLite
+    participant TM as Telemetry
+    participant RT as Router
+
+    M->>SH: 执行 sfx match --task "需求原文"
+    SH->>MN: 启动进程
+    MN->>WD: 启动 3s 硬超时定时器
+    MN->>MN: panic recover 兜底注册
+    MN->>ST: 打开 sfx.db (WAL, busy_timeout=5s)
+    ST-->>MN: ok（首开约 30~80ms，含 migration 检查）
+
+    MN->>MS: Match(ctx, {task, channel: convention-file})
+    MS->>IX: 加载可用 skill 索引
+    Note over IX: 源自 $SFX_HOME/cache/index.json<br/>由 scan 生成，正文不入索引<br/>未命中回退：从 skills 表重建
+    IX-->>MS: N 条候选元数据 ≤200
+
+    par 并行信号计算
+        MS->>ST: 关键词精确/模糊命中（走 triggers 索引）
+        ST-->>MS: 命中集合 + 权重
+        MS->>MS: 标签匹配（tags 交集加权）
+        MS->>SE: 可选语义打分 ctx 300ms 超时
+        alt 语义可用（仅常驻进程场景）
+            SE-->>MS: 相似度向量
+        else 不可用/超时/报错
+            SE-->>MS: 空结果 + 降级标记
+            Note over MS,SE: 关闭语义时主链路不降级<br/>仅该信号权重摊到其它信号
+        end
+        MS->>ST: 取 SkillScore 历史分做加权
+        ST-->>MS: {score, sample_size, sufficient}
+    end
+
+    MS->>MS: 归一化融合 → TopN 排序
+    alt 最高分 ≥ 阈值 0.35
+        MS->>RT: 构造 Candidates
+        Note over RT: 硬性裁剪：只输出<br/>skill_id / name / summary / path / score / reason<br/>严禁包含 SKILL.md 正文
+    else 全部低于阈值
+        MS->>RT: 空列表（仍记一次曝光）
+    end
+
+    RT-->>MN: MatchResult
+    MN->>TM: 写 session + call_events(impression × N)
+    TM->>ST: 批量插入（单事务）
+    ST-->>TM: ok
+    Note over TM,ST: 埋点失败不影响返回结果<br/>仅写 errno 日志（永不阻塞 Metis）
+    MN->>WD: 取消定时器
+    MN-->>SH: stdout 单行 JSON 信封
+    SH-->>M: 一行 JSON（约 300~800 字节）
+    Note over M: Metis 解析 matched[0].path<br/>用 Read 工具读取正文<br/>再执行任务
+
+sequenceDiagram
+    autonumber
+    participant U as 用户 / Web
+    participant CV as cmd_conv
+    participant RD as ConvfileRenderer
+    participant AN as convfile.Scan 纯函数
+    participant MG as convfile.Migrate
+    participant WR as convfile.Writer
+    participant FS as port.FS
+    participant ST as Store
+
+    U->>CV: sfx conv sync --target AGENTS.md,CLAUDE.md --project .
+    loop 每个目标文件
+        CV->>RD: RenderBlock(kind, {project, sfxPath, topN})
+        RD-->>CV: desired 字符串（确定性，不含时间戳）
+        CV->>FS: ReadFile(path) —— 不存在则视为空文件
+        FS-->>CV: raw bytes
+        CV->>AN: Scan(text)
+
+        alt Status = none（无锚点）
+            Note over AN,CV: 追加模式：原文件字节全保留<br/>按探测到的 EOL 在 EOF 追加一块
+        else Status = single（正常）
+            CV->>MG: 检查 old.version vs V_CUR
+            alt old.version &lt; V_CUR
+                MG->>MG: 抽取旧块 USER 子区原文 → 渲染新模板 → 回插
+                MG-->>CV: upgraded desired + 迁移说明
+            else old.version &gt; V_CUR
+                CV-->>U: E_VERSION_NEWER 拒绝写入（CLI 版本过旧）
+            else 同版本
+                MG-->>CV: desired 原样
+            end
+            CV->>WR: SyncFile(path, desired, opts)
+        else Status = multiple（重复锚点）
+            Note over AN,WR: 移除全部旧块（生成物，丢弃无损）<br/>在首个块原位置插入一块<br/>块外手写内容 100% 保留
+            WR->>FS: 写 .sfxbak 备份
+        else Status = corrupt（孤立 BEGIN/END）
+            alt 未带 --repair
+                CV-->>U: E_ANCHOR_CORRUPT + 行号 + 修复建议（不改动文件）
+            else --repair
+                WR->>FS: 先备份 .sfxbak
+                WR->>WR: 孤儿 BEGIN → 截断至其后首个 END 或 EOF<br/>孤儿 END → 仅删除该标记行
+                WR->>FS: 按上述 .
+            end
+        end
+
+        WR->>WR: hash = sha256(normalize(desired))
+        WR->>ST: 读取记录的上次 block_hash / EOL / file_mtime
+        alt hash 相同 且 EOL 一致
+            WR-->>CV: changed=false → **不写盘**（mtime 不变）
+        else 不同
+            WR->>FS: 组装 BOM + 原 EOL + 新内容 → tmp → 同目录 rename
+            Note over WR,FS: 原子替换：rename 保证不产生半截文件<br/>保留原 fileMode
+            WR-->>CV: changed=true + backup_path
+        end
+        CV->>ST: upsert convention_files(status=ok, block_hash, anchor_version, updated_at)
+    end
+    CV-->>U: 单行 JSON { files:[{path,changed,status}] }
+    Note over U: 连续执行两次 → 第二次全部 changed=false<br/>文件字节级零 diff
+
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant P as cmd_prime
+    participant CF as 已生成的约定文件
+    participant RD as Renderer
+    participant M as Metis 对话窗口
+    participant S1 as sfx match-load-feedback
+
+    Note over U,M: 前提：Q1 未决 —— 若实测 Metis 不读任何约定文件
+    U->>P: sfx prime [--copy]
+    alt 约定文件已存在
+        P->>CF: 读取锚点块内容
+        CF-->>P: 指令块
+        P->>P: 改写为「对话口吻」：把“本仓库的规矩”改成“本次对话请遵守”
+    else 不存在
+        P->>RD: 按默认模板渲染 prime 版指令
+    end
+    P->>P: 补充自包含性检查
+    Note over P: 必须包含：① 如何调用 sfx match<br/>② JSON 字段怎么读<br/>③ Read 哪个 path<br/>④ 失败就忽略继续<br/>⑤ 收尾如何 load/feedback
+    P-->>U: 打印【给用户的说明】+【可粘贴指令块】
+    opt --copy
+        P->>P: 写入系统剪贴板
+    end
+    U->>M: 在对话开头粘贴指令块
+    M->>S1: 后续每个任务执行 sfx match …
+    S1-->>M: 精简路由卡（channel=prime）
+    M->>M: Read 正文 → 执行任务 → feedback
+    Note over S1: 埋点记录 channel=prime<br/>以便统计“逃生通道”使用量
+
+sequenceDiagram
+    autonumber
+    participant A as 成员A CLI
+    participant SRV as sfx serve team
+    participant DB as 服务端 sfx.db
+    participant RV as 审核者 Web
+    participant B as 成员B CLI
+    participant LDB as B 本地 sfx.db
+
+    A->>A: sfx submit --skill &lt;id&gt; --visibility team
+    A->>SRV: POST /api/v1/sync/submit {skill 元数据 + body_gzip}
+    SRV->>SRV: 校验 SKILL.md 格式 / 重名 / 敏感词扫描
+    alt 格式不合法 / 重名
+        SRV-->>A: E_VALIDATE + 具体行号 + 原因
+        Note over A: 本地修改后重提
+    else 通过
+        SRV->>DB: 写 skills(pending) + submissions(pending) + audit
+        alt review_enabled = true（默认开，Q3=A）
+            RV->>SRV: GET /api/v1/submissions?status=pending
+            SRV-->>RV: 待审列表 + 正文预览
+            RV->>SRV: POST /submissions/{id}/review {approve, visibility}
+            SRV->>DB: skills(status=active, visibility) submissions(approved)
+        else review_enabled = false
+            SRV->>DB: 直接 active
+        end
+        SRV->>DB: counters.sync_seq 事务自增 → seq=118, version+1
+        SRV-->>A: {submission_id, status}
+    end
+
+    loop 成员每天/命令级轮询
+        B->>B: sfx sync [--once]
+        B->>SRV: GET /api/v1/sync/pull?cursor=LOCAL_SEQ&limit=100
+        SRV->>SRV: 按 visibility 与成员角色裁剪
+        Note over SRV: 私有 skill 仅作者可见<br/>越权直接返回 E_PERMISSION
+        SRV-->>B: items[ {seq, op, skill, body_gzip} ] + next_cursor
+        loop 逐条应用（幂等）
+            B->>LDB: 按 content_hash 比对
+            alt hash 相同
+                B->>B: 跳过写盘（幂等）
+            else upsert
+                B->>B: 解 gzip → 写 skills 目录 / SKILL.md
+                B->>LDB: upsert skills + skill_versions
+            else op=delete
+                B->>LDB: 软删 + 清理文件
+            end
+        end
+        B->>LDB: 更新 sync_state(cursor=next_cursor, last_pull_at)
+        B->>B: 重建 MatchIndex 缓存
+    end
+    Note over B: 重复 sync 无副作用；成员B 的 Metis 立即可命中新 skill
+
+sequenceDiagram
+    autonumber
+    participant U as 用户浏览器
+    participant H as handler_feedback
+    participant FB as service.Feedback
+    participant SC as service.Scorer
+    participant ST as Store-SQLite
+    participant V as 看板
+
+    U->>H: GET /feedback/pending?page=1
+    H->>ST: 查有曝光但无反馈的 session（左连接）
+    ST-->>H: {session, task_text, candidates[]}
+    H-->>U: 卡片流 HTML
+    U->>H: POST /feedback {session_id, skill_id, vote:down, reason_tag}
+    H->>FB: Submit(ctx, fb)
+    FB->>ST: Tx: upsert feedbacks(session,skill) + 旧记录入 feedback_history
+    ST-->>FB: feedback_id
+    FB->>SC: Apply(fb) —— 同步增量重算（≤5s 内反映，FR-21）
+    SC->>ST: 读 impressions/loads/ups/downs/reworks
+    SC->>SC: LoadRate / AdoptionRate / ReworkRate → Score
+    alt 有效样本 N &lt; 5
+        SC->>ST: sufficient=0, score 保留但不参与排行与 match 加权
+    else N ≥ 5
+        SC->>ST: sufficient=1
+    end
+    SC->>ST: upsert skill_scores + upsert score_daily(day)
+    ST-->>FB: ok
+    FB-->>H: {feedback_id, new_score}
+    H-->>U: 信封 JSON，客户端从待评价队列移除该卡片
+    U->>V: GET /metrics/skills?sort=score
+    V->>ST: 读物化表 skill_scores（不做全量聚合）
+    ST-->>V: 分页行，P95 低于 300ms
+    V-->>U: 表格 + 漏斗 + 趋势（读 score_daily）
+
+%% ============================================================
+%% 图六：sfx probe 宿主能力探测与 Tier 定档（ARCH §12.4）
+%% 一次对话同时测出「能力位 exec/read/edit」与「通道位 哪个文件生效」
+%% ============================================================
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant PR as sfx probe
+    participant FS as port.FS
+    participant M as Metis 对话
+    participant CF as config.yaml
+    participant CV as sfx conv sync
+
+    U->>PR: sfx probe --project .
+    PR->>FS: 写入探测块到全部候选文件<br/>AGENTS.md / CLAUDE.md / .cursorrules
+    PR->>FS: 生成 .sfx/probe/read.txt 与 write.md 夹具
+    PR-->>U: 提示：请到 Metis 里问一句话，观察三步结果
+
+    U->>M: 发起一次普通对话
+    M->>M: 自动读取某个候选约定文件（通道位）
+    M->>M: 步骤1 尝试执行 echo SFX_PROBE_EXEC_OK
+    M->>M: 步骤2 尝试读取 read.txt
+    M->>M: 步骤3 尝试追加 write.md
+    M-->>U: 回复中报告 1/2/3 各自 OK 或 NO
+
+    U->>PR: 交互式选择（三选一 + 选生效文件名）
+    Note over U,PR: exec=OK → Tier A<br/>exec=NO 且 read=OK → Tier B<br/>两者都 NO → Tier C<br/>edit 位不参与定档，只决定可选日志方案
+    PR->>CF: 写入 host.tier / capabilities / channel_files / probed_at
+    PR->>FS: 清理探测块与 .sfx/probe 夹具
+    PR-->>U: 定档结果 + 下一步命令提示
+
+    U->>CV: sfx conv sync
+    CV->>CV: 按 host.tier 选择模板<br/>A=match 指令块 / B=路由索引块 / C 交给 prime
+    CV->>FS: 幂等重写锚点块（块外手写内容不变）
+    Note over CV,FS: 用户可随时 sfx config set host.tier=X 切换<br/>重跑 sync 即整体替换，旧指令无残留
+
+%% ============================================================
+%% 图七：Tier B 路由链路（ARCH §12.2）——宿主不可执行命令
+%% 匹配决策不降反升，埋点两层缺失由人工自报补偿
+%% ============================================================
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant IG as sfx index-gen
+    participant ST as Store(SQLite)
+    participant CV as sfx conv sync
+    participant M as Metis（仅可读文件）
+    participant SK as SKILL.md 正文文件
+    participant RB as 自报入口 Web/CLI
+    participant MS as manual_scores 物化表
+
+    U->>IG: sfx index-gen --tier b --budget 1500
+    IG->>ST: 取启用中的 skill（过滤停用/超大正文）
+    ST-->>IG: 候选集
+    IG->>IG: 排序 rank 后按 slug 字典序 tie-break（保证确定性）
+    IG->>IG: 估算 token 并选择压缩档
+    alt 候选 ≤40 且 ≤预算80%
+        IG->>IG: L0 全量：名/摘要/触发词/路径/版本
+    else 41~100 或超预算
+        IG->>IG: L1 精简：按 rank 截断前 40
+    else 更多或仍超预算
+        IG->>IG: L2 极简：只留 name + path（紧凑列表）
+    else 仍超硬上限
+        IG->>IG: L3 自包含：Top20 + 「不在列表就直答，不要猜路径」
+        Note over IG: Tier B 不能用 sfx find 兜底<br/>因为宿主不能执行命令
+    end
+    IG-->>CV: 索引文本 + 档位 + token 数 + 告警
+
+    CV->>CV: 渲染 Tier B 模板（含防幻觉约束 7 条）
+    CV->>CV: hash 比对 → 无变化则不写盘
+    CV-->>U: 约定文件已就绪
+
+    U->>M: 提出真实任务
+    M->>M: 读约定文件 → 阅读技能索引 → 自行路由
+    alt 索引中有匹配项
+        M->>SK: 用文件读取能力打开该行路径
+        SK-->>M: SKILL.md 正文
+        M->>M: 严格按正文执行任务
+        M-->>U: 结果 + 末行标记 SFX|route|skill名
+    else 无匹配
+        M-->>U: 直接按通用能力回答（禁止编造路径）
+        M-->>U: 末行标记 SFX|route|none
+    end
+
+    Note over M,RB: 埋点缺口：Impression 与 Load 两层无法自动采集
+    U->>RB: 首页常驻自报条 / 列表行内 / sfx rate 一行打分
+    RB->>ST: 写 sessions(channel=manual) + feedbacks(source=manual)
+    RB->>MS: 更新 manual_scores（禁止写入 skill_scores）
+    Note over RB,MS: 硬规则 M-1~M-6：人工数据不参与<br/>SkillScore 公式 / 趋势 / 排行 / match 加权<br/>Tier B 下 history 权重强制置 0 并摊还
+    MS-->>U: 看板展示：🤖自动 N/A ｜ ✍️人工 好评率 80%（样本 15）
+
+
+%% ============================================================
+%% 6.6 约定文件 sync 的 Git 隔离与存量接管（FR-46 / FR-48，见 ARCH §12.9）
+%% ============================================================
+sequenceDiagram
+    autonumber
+    participant U as 用户/终端
+    participant CF as sfx/cli/cmd_conv.py
+    participant PX as infra/pathx.py
+    participant WR as adapter/convfile/writer.py
+    participant DC as core/service/doctor.py
+
+    U->>CF: sfx conv sync
+    CF->>PX: detect_git(cwd) 调 git rev-parse --show-toplevel
+
+    alt 非 Git 目录（rc=128）
+        PX-->>CF: not_a_repo
+        CF->>WR: 正常锚点写入（静默跳过隔离，不写 .gitignore）
+        CF-->>U: ok=true（无任何告警）
+
+    else Git 工作区（普通仓库 / worktree / submodule）
+        PX->>PX: git rev-parse --git-path info/exclude<br/>（① 不手工拼 .git/info/exclude 路径）
+        PX-->>CF: repo_root + exclude 路径
+        CF->>PX: is_tracked(目标文件) 调 git ls-files --error-unmatch
+
+        alt 目标文件已被 Git 跟踪（FR-48）
+            PX-->>CF: tracked
+            alt 未显式指定 takeover（默认 abort）
+                CF-->>U: E_CONV_TRACKED_BY_GIT + data.options=[move-aside|append|abort]
+            else --takeover=move-aside
+                CF->>PX: 重命名为 原名.sfx-orig + git rm --cached
+                CF->>WR: 写入新约定文件
+            else --takeover=append
+                CF->>WR: 保留全文，仅追加锚点块
+            end
+
+        else 未跟踪
+            PX->>PX: ensure_excluded(候选约定文件名条目 + .sfx/ 条目)
+            alt L1 exclude 可写
+                PX-->>CF: L1 幂等追加（用户的 .gitignore 字节不变）
+            else L2 exclude 不可写
+                PX-->>CF: 降级写 .gitignore（输出 W_GITIGNORE_MODIFIED）
+            else L3 IO 失败
+                PX-->>CF: 不阻断，输出 W_GIT_EXCLUDE_FAILED + 首页告警条
+            end
+            CF->>WR: 幂等锚点写入（hash 比对，无变化不写盘）
+            CF-->>U: ok=true, changed=false（第二次 sync 字节零 diff）
+        end
+    end
+
+    U->>DC: sfx doctor
+    DC->>PX: git ls-files / git log -- <file>
+    alt 已跟踪 或 历史中曾出现
+        DC-->>U: CRITICAL W_CONV_TRACKED_BY_GIT / W_CONV_IN_HISTORY<br/>+ 补救指引（git rm --cached → filter-repo → 通知同事 rebase）
+    else 未跟踪且已隔离
+        DC-->>U: 状态徽标 ✅已隔离
+    end

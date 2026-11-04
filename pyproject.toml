@@ -1,0 +1,14 @@
+# 本项目是「零依赖 + zipapp 单文件分发」，构建走 `python scripts/build.pyz.py`。
+# 此文件仅作元数据声明（name / version / 入口点），刻意不写 [build-system]，
+# 以免引入 setuptools / hatchling 等任何 build 依赖。保持零依赖。
+
+[project]
+name = "skillforge"
+version = "0.3.0"
+description = "本地 AI 技能管理器：扫描入库、路由匹配、用真实采纳率衡量技能好坏"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "SkillForge contributors" }]
+
+[project.scripts]
+sfx = "sfx.__main__:main"
